@@ -190,55 +190,6 @@ update_git_repo() {
   fi
 }
 
-# ── CoreFoundation tarball ──────────────────────────────────────────────
-# CF 没有 git 仓库，只有 opensource.apple.com 的 tarball，且 Apple 已停更
-# （最后一版是 10.13.6 的 CF-1153.18）。这里比对索引页的最高版本号，
-# 有新版就下载解压成新目录，不覆盖旧目录。
-update_cf_tarball() {
-  local local_dir local_ver remote_ver
-  local_dir="$(find "$ROOT" -maxdepth 1 -type d -name 'CF-*-apple' 2>/dev/null | sort -V | tail -1)"
-
-  if [ -n "${local_dir}" ] && [ -f "${local_dir}/MakefileVersion" ]; then
-    local_ver="$(sed -n 's/^VERSION=//p' "${local_dir}/MakefileVersion" | tr -d '[:space:]')"
-    info "本地版本 CF-${local_ver}（$(basename "${local_dir}")）"
-  else
-    local_ver=""
-    info "本地没有 CF tarball 目录"
-  fi
-
-  remote_ver="$(curl -sL --max-time 60 https://opensource.apple.com/tarballs/CF/ \
-    | grep -o 'CF-[0-9][0-9.]*\.tar\.gz' | sed 's/^CF-//; s/\.tar\.gz$//' \
-    | sort -V | tail -1)"
-
-  if [ -z "${remote_ver}" ]; then
-    err "取不到 opensource.apple.com 的 CF 版本索引"
-    note "  CoreFoundation  ${C_RED}版本检查失败${C_RESET}"
-    return
-  fi
-  info "远端最新 CF-${remote_ver}"
-
-  if [ "${local_ver}" = "${remote_ver}" ]; then
-    ok "已是最新（Apple 自 macOS 10.13.6 起已停止开源 CF，预期长期不变）"
-    note "  CoreFoundation  已最新（CF-${local_ver}，上游已停更）"
-    return
-  fi
-
-  warn "发现新版本 CF-${remote_ver}，开始下载"
-  local tgz="$ROOT/CF-${remote_ver}.tar.gz" dest="$ROOT/CF-${remote_ver}-apple"
-  if run curl -fL --max-time 600 -o "${tgz}" \
-       "https://opensource.apple.com/tarballs/CF/CF-${remote_ver}.tar.gz"; then
-    run tar xzf "${tgz}" -C "$ROOT" \
-      && run mv "$ROOT/CF-CF-${remote_ver}" "${dest}" \
-      && run rm -f "${tgz}"
-    ok "已解压到 $(basename "${dest}")（旧目录保留，请手动比对后删除）"
-    note "  CoreFoundation  ${C_GREEN}新增${C_RESET} CF-${remote_ver}（旧的 CF-${local_ver} 保留）"
-  else
-    err "下载失败"
-    rm -f "${tgz}"
-    note "  CoreFoundation  ${C_RED}下载失败${C_RESET}"
-  fi
-}
-
 # ── 参数解析 ────────────────────────────────────────────────────────────
 TARGETS=()
 while [ $# -gt 0 ]; do
@@ -285,8 +236,8 @@ if wants foundation; then
 fi
 
 if wants cf; then
-  hdr "CoreFoundation tarball"
-  update_cf_tarball
+  hdr "CoreFoundation（Apple drop，上游已停更于 CF-1153.18）"
+  update_git_repo "CF-1153.18-apple" "CoreFoundation"
 fi
 
 # 本次动过的目标，其 check-updates.sh 缓存作废；没动过的保留，

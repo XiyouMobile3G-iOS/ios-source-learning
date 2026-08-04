@@ -193,30 +193,6 @@ check_git_repo() {
   fi
 }
 
-# ── CoreFoundation tarball 检查 ─────────────────────────────────────────
-# CF 无 git 仓库，比对 opensource.apple.com 索引页的最高版本号。
-check_cf() {
-  local out="$TMPDIR_/cf" local_dir local_ver remote_ver
-  local_dir="$(find "$ROOT" -maxdepth 1 -type d -name 'CF-*-apple' 2>/dev/null | sort -V | tail -1)"
-  if [ -n "$local_dir" ] && [ -f "${local_dir}/MakefileVersion" ]; then
-    local_ver="$(sed -n 's/^VERSION=//p' "${local_dir}/MakefileVersion" | tr -d '[:space:]')"
-  else
-    local_ver=""
-  fi
-
-  remote_ver="$(curl -sL --max-time "$NET_TIMEOUT" https://opensource.apple.com/tarballs/CF/ \
-    | grep -o 'CF-[0-9][0-9.]*\.tar\.gz' | sed 's/^CF-//; s/\.tar\.gz$//' | sort -V | tail -1)"
-
-  if [ -z "$remote_ver" ]; then
-    printf 'error\tCoreFoundation: 取不到版本索引\n' > "$out"; return
-  fi
-  if [ "$local_ver" = "$remote_ver" ]; then
-    printf 'ok\tCoreFoundation: 最新（CF-%s，上游已停更）\n' "$local_ver" > "$out"
-  else
-    printf 'update\tCoreFoundation: CF-%s → CF-%s\n' "${local_ver:-无}" "$remote_ver" > "$out"
-  fi
-}
-
 # ── 主流程 ──────────────────────────────────────────────────────────────
 TMPDIR_="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_"' EXIT
@@ -234,7 +210,7 @@ wants objc4             && probe objc4             check_git_repo objc4         
 wants libdispatch       && probe libdispatch       check_git_repo libdispatch       "libdispatch"               libdispatch         branch
 wants libdispatch-apple && probe libdispatch-apple check_git_repo libdispatch-apple "libdispatch-apple"         libdispatch-apple   tag
 wants foundation        && probe foundation        check_git_repo foundation        "swift-corelibs-foundation" corelibs-foundation branch
-wants cf                && probe cf                check_cf
+wants cf                && probe cf                check_git_repo cf                "CF-1153.18-apple"          CoreFoundation      branch
 wait
 
 for key in ${FRESH+"${FRESH[@]}"}; do

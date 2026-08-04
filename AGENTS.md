@@ -73,7 +73,7 @@
 | 目录 | 内容 | 版本 |
 |---|---|---|
 | `new objc4/` | ObjC runtime | 分支 `objc4-951.7` |
-| `CF-1153.18-apple/` | CoreFoundation，**RunLoop 权威版** | CF-1153.18（macOS 10.13.6） |
+| `CF-1153.18-apple/` | CoreFoundation，**RunLoop 权威版** | 分支 `main` @ `CF-1153.18`（macOS 10.13.6，上游已停更） |
 | `libdispatch-apple/` | GCD，**macOS drop** | tag `libdispatch-1542.100.32`（detached HEAD） |
 | `libdispatch/` | GCD，Swift 开源版 | main |
 | `swift-corelibs-foundation/` | Swift CF + Foundation | main |
@@ -129,22 +129,24 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 ./update-sources.sh -h                     # 帮助
 ```
 
-目标：`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `cf`。四种策略：
+目标：`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `cf`。三种策略：
 
 | 目标 | 策略 | 原因 |
 |---|---|---|
 | `objc4` | 只 fetch，报告有无新 drop，**永不动工作区** | 在自建分支上且有本地笔记未提交 |
-| `libdispatch`、`foundation` | `merge --ff-only` | 干净的 tracking 分支 |
+| `libdispatch`、`foundation`、`cf` | `merge --ff-only` | 干净的 tracking 分支 |
 | `libdispatch-apple` | 自动 checkout 到版本号最高的 tag | drop 代码在 tag 上，`main` 常落后 |
-| `cf` | 比对 tarball 索引版本，有新版解压成**新目录** | 非 git，且上游已停更 |
 
-安全约束：工作区脏默认跳过（`-f` 才 stash）；本地领先上游判为分叉只报告；只用 `--ff-only`；CF 新版不覆盖旧目录。fetch 失败自动重试 3 次。
+安全约束：工作区脏默认跳过（`-f` 才 stash）；本地领先上游判为分叉只报告；只用 `--ff-only`。fetch 失败自动重试 3 次。
+
+CF 的仓库是 `apple-oss-distributions/CF`，`main` 停在 `CF-1153.18`（2021 年最后一次 push），实际不会再有更新；留着 git 主要是为了能 `git diff CF-1151.16 CF-1153.18` 对照历史版本。
 
 ---
 
 ## 工作约定
 
-- 四份源码都是**只读研究**，不追求可构建（objc4 需 internal SDK，CF 是精简包缺文件）。
-- 各仓库里的 `AGENTS.md` / `CLAUDE.md` 笔记已写入各自 `.git/info/exclude`，不会污染 `git status`，也就不会让更新脚本跳过合并。
+- 五份源码都是**只读研究**，不追求可构建（objc4 需 internal SDK，CF 是精简包缺文件）。
+- 五个子目录都是独立 git 仓库，各自的 `AGENTS.md` / `CLAUDE.md` 笔记已写入各自 `.git/info/exclude`，不会污染 `git status`，也就不会让更新脚本跳过合并。
+- 工作区本身也是个 git 仓库，但只版本管理本文件、`CLAUDE.md` 和两个脚本；五个子目录一律 `.gitignore`，不做 submodule，互不干扰。
 - 引用代码带 `文件:行号` + 版本号；两个 Swift 仓库会随更新变动，最好同时记 commit。
 - 缩进跟随各仓库原有风格（objc4 是 4 空格，与用户全局 OC 的 2 空格规范不同）。
