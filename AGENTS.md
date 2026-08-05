@@ -5,6 +5,20 @@
 
 ---
 
+## 规范零：先确认工作区已搭好
+
+本仓库**不包含 Apple 源码本体**，五份源码由 `bootstrap.sh` 从各自上游克隆。
+新克隆的仓库里，下表所有子目录都还不存在，本文件后面的链接也就全是死链。
+
+动手前先看一眼五个源码目录在不在（`ls`）；缺任何一个就运行：
+
+```bash
+./bootstrap.sh            # 克隆缺失的源码 + 把 notes/ 下的笔记挂回原位，可重复运行
+./bootstrap.sh --check    # 只体检，不改动
+```
+
+首次克隆约 2–3 GB、耗时较长，**必须先告知用户再执行**，不要在回答问题的中途默默拉一遍。
+
 ## 规范一：先更新源码，再回答
 
 只要问题涉及 objc runtime / RunLoop / CoreFoundation / GCD / Foundation，无论看起来多简单：
@@ -73,6 +87,7 @@
 | `libdispatch-apple/` | GCD，**macOS drop** | tag `libdispatch-1542.100.32`（detached HEAD） |
 | `libdispatch/` | GCD，Swift 开源版 | main |
 | `swift-corelibs-foundation/` | Swift CF + Foundation | main |
+| `notes/` | 上面五个目录里全部笔记的**真身**，本仓库唯一版本管理的正文 | 跟随本仓库 |
 
 ## 选型铁律
 
@@ -142,7 +157,10 @@ CF 的仓库是 `apple-oss-distributions/CF`，`main` 停在 `CF-1153.18`（2021
 ## 工作约定
 
 - 五份源码都是**只读研究**，不追求可构建（objc4 需 internal SDK，CF 是精简包缺文件）。
-- 五个子目录都是独立 git 仓库，各自的 `AGENTS.md` / `CLAUDE.md` 笔记已写入各自 `.git/info/exclude`，不会污染 `git status`，也就不会让更新脚本跳过合并。
-- 工作区本身也是个 git 仓库，但只版本管理本文件、`CLAUDE.md` 和两个脚本；五个子目录一律 `.gitignore`，不做 submodule，互不干扰。
+- 五个子目录都是独立 git 仓库，不做 submodule，一律 `.gitignore`，互不干扰。
+- **笔记的真身在 `notes/`**，源码树里那些 `AGENTS.md` / `CLAUDE.md` 都是指向它的符号链接（`bootstrap.sh` 挂的）。
+  就地编辑 `new objc4/runtime/CLAUDE.md` 等于编辑 `notes/new objc4/runtime/CLAUDE.md`，改动自动进入本仓库的 `git status`——**记得提交**。
+- 这些链接同时写进了各子仓库的 `.git/info/exclude`，不污染子仓库 `git status`，也就不会让更新脚本因「工作区脏」跳过合并。
+- 新增笔记时**必须写进 `notes/` 再跑 `./bootstrap.sh --notes-only` 挂载**；直接在源码树里新建文件会成为游离的未跟踪文件，别人 clone 不到。
 - 引用代码带 `文件:行号` + 版本号；两个 Swift 仓库会随更新变动，最好同时记 commit。
 - 缩进跟随各仓库原有风格（objc4 是 4 空格，与用户全局 OC 的 2 空格规范不同）。

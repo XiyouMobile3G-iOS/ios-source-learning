@@ -2,6 +2,12 @@
 
 本目录的完整项目说明在同目录的 [`AGENTS.md`](./AGENTS.md)，请按需读取。
 
+## 工作区未搭建时
+
+本仓库不含 Apple 源码本体。若 `new objc4/` `CF-1153.18-apple/` `libdispatch-apple/`
+`libdispatch/` `swift-corelibs-foundation/` 这五个目录不存在，先告知用户，再运行
+`./bootstrap.sh`（首次约 2–3 GB）。细则见 `AGENTS.md` 的「规范零」。
+
 ## 教学提示词渐进式路由
 
 当用户请求「讲解」「学习」「原理」「为什么」或源码分析时：
