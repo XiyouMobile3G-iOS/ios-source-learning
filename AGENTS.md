@@ -33,7 +33,9 @@
 |---|---|---|
 | 0 | `UPTODATE` | 直接读源码，**不要**跑 update-sources.sh |
 | 10 | `UPDATE` | 跑 `./update-sources.sh` 再读 |
-| 2 | `ERROR` | 视为「未能更新」，声明基于本地版本后作答 |
+| 2 | `ERROR` | 先申请网络权限，用完全相同的参数重跑一次 `check-updates.sh`；重跑仍返回 2 才视为「未能更新」 |
+
+首次检查返回退出码 2 时，可能只是 agent 沙箱无法访问网络或本机代理。agent **必须申请沙箱外网络权限后重跑一次同一条 `check-updates.sh` 命令**，不得改用手动 `git fetch`、`git pull` 或 `git ls-remote` 绕过脚本。只有获得网络权限后的重跑仍返回 2，才声明基于本地版本作答。
 
 两个脚本都接受目标名收窄范围：`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `cf`，
 如 `./check-updates.sh libdispatch-apple`。其余参数见脚本 `-h`。
