@@ -1,19 +1,32 @@
 #!/bin/bash
 #
-# bootstrap.sh —— 一键把「源码学习」工作区搭起来
+# bootstrap.sh —— 一键把「源码学习」工作区搭起来（下载源码 + 挂载笔记）
 #
-#   ./bootstrap.sh                 克隆缺失的上游源码 + 挂载笔记（可重复运行）
+#   ./bootstrap.sh                 下载缺失的上游源码 + 挂载笔记（可重复运行）
 #   ./bootstrap.sh -n              演练，只报告不改动
-#   ./bootstrap.sh --notes-only    只重新挂载笔记，不克隆
-#   ./bootstrap.sh --check         只体检：报告缺什么、链接是否完好，不改动
+#   ./bootstrap.sh --notes-only    只重新挂载笔记，不下载
+#   ./bootstrap.sh --check         只体检：本地有什么、缺什么、链接是否完好，不改动
 #   ./bootstrap.sh objc4 cf        只处理指定目标
 #   ./bootstrap.sh -h              帮助
 #
-# 目标：objc4 / libdispatch / libdispatch-apple / foundation / cf
+# 目标见 sources.sh；当前为
+#   Apple 底层：objc4 / libdispatch / libdispatch-apple / foundation / cf
+#   第三方库：  afnetworking / jsonmodel / sdwebimage（下载到 third-party/）
 #
-# 本仓库只版本管理笔记与脚本，五份 Apple 源码由本脚本从各自上游克隆到
-# 固定 ref；notes/ 下的笔记以符号链接挂回源码树原位，因此「就地编辑笔记」
-# 改的仍然是被版本管理的那份文件，不会漂移。
+# 三件事，跑之前先知道：
+#
+# 1. 源码不进本仓库。本仓库只版本管理笔记与脚本；八份源码由本脚本从各自上游
+#    下载到固定 ref，并由 .gitignore 忽略——脚本每轮都会用 git check-ignore
+#    核对这一点，漏了会告警。
+#
+# 2. 下载前先核对本地。已经下载过的不会重复拉（首次 2–3 GB），同时核对
+#    origin 与当前版本：目录里放着别的仓库、或版本与笔记基准不一致，都会明确
+#    报出来并给出对齐命令，但**绝不自动切版本**——切了笔记里的行号就全废了。
+#
+# 3. 笔记的真身在 notes/，以符号链接挂回源码树原位，所以「就地编辑笔记」改的
+#    仍然是被版本管理的那份文件，不会漂移。
+#
+# 源码清单在同目录的 sources.sh，与 check-updates.sh / update-sources.sh 共用。
 #
 # 搭好之后的日常循环见 README.md：check-updates.sh → update-sources.sh。
 #
@@ -56,19 +69,14 @@ usage() {
   exit 0
 }
 
-# ── 仓库定义 ────────────────────────────────────────────────────────────
-# 目标名|目录名|上游 URL|模式|ref
-#   模式 branch      追踪该分支（日常 ff-only 更新）
-#   模式 pinned-tag  钉在指定 tag 上并建同名本地分支（笔记行号按此 drop 写）
-#   模式 latest-tag  切到版本号最高的 tag（Apple drop 代码在 tag 上，main 常落后）
-# blob:none 部分克隆用于两个体量大、只读研究的 Swift 仓库。
-REPOS=(
-  "objc4|new objc4|https://github.com/apple-oss-distributions/objc4.git|pinned-tag|objc4-951.7|"
-  "libdispatch|libdispatch|https://github.com/apple/swift-corelibs-libdispatch.git|branch|main|--filter=blob:none"
-  "libdispatch-apple|libdispatch-apple|https://github.com/apple-oss-distributions/libdispatch.git|latest-tag||"
-  "foundation|swift-corelibs-foundation|https://github.com/apple/swift-corelibs-foundation.git|branch|main|--filter=blob:none"
-  "cf|CF-1153.18-apple|https://github.com/apple-oss-distributions/CF.git|branch|main|"
-)
+# ── 源码清单 ────────────────────────────────────────────────────────────
+# 清单是三个脚本共用的单一事实来源，新增源码只改 sources.sh 一行。
+if [ ! -f "$ROOT/sources.sh" ]; then
+  printf '缺少 sources.sh（源码清单），无法继续\n' >&2
+  exit 1
+fi
+# shellcheck source=sources.sh
+. "$ROOT/sources.sh"
 
 # ── 参数解析 ────────────────────────────────────────────────────────────
 TARGETS=()
@@ -85,11 +93,13 @@ while [ $# -gt 0 ]; do
 done
 
 ALL_TARGETS=()
-for spec in "${REPOS[@]}"; do
-  IFS='|' read -r key _ _ _ _ _ <<< "$spec"
-  ALL_TARGETS+=("$key")
-done
+while IFS= read -r key; do ALL_TARGETS+=("$key"); done < <(source_all_keys)
 [ ${#TARGETS[@]} -eq 0 ] && TARGETS=("${ALL_TARGETS[@]}")
+
+# 目标名打错时早点报错，别等跑完才发现什么都没做
+for t in "${TARGETS[@]}"; do
+  source_lookup "$t" || { err "未知目标 ${t}（可用：${ALL_TARGETS[*]}）"; exit 1; }
+done
 
 wants() {
   local t
@@ -97,44 +107,110 @@ wants() {
   return 1
 }
 
-# ── 克隆 ────────────────────────────────────────────────────────────────
-clone_repo() {
-  local key="$1" dir="$2" url="$3" mode="$4" ref="$5" filter="$6"
+# ── 下载前的本地核对 ────────────────────────────────────────────────────
+# 已经下载过的源码不重复拉（首次 2–3 GB，重下一次代价太大），
+# 但「目录在」不等于「源码对」——还要核对 origin 与版本，否则后面笔记的行号会对不上。
+#
+# 返回：0 本地已有可用源码，跳过下载   1 本地没有，需要下载   2 有冲突，需人工处理
+inspect_local() {
+  local key="$1" dir="$2" url="$3" policy="$4" ref="$5"
   local path="$ROOT/$dir"
 
-  if [ -d "$path/.git" ]; then
-    local desc
-    desc="$(git -C "$path" describe --tags --always 2>/dev/null || echo '?')"
-    ok "已存在，跳过克隆（${desc}）"
-    note "  ${key}  已存在"
-    return 0
-  fi
+  source_local_state "$dir"
+  case $? in
+    1) return 1 ;;
+    2)
+      err "$dir 已存在但不是 git 仓库，未覆盖，请先手动移走"
+      note "  ${key}  ${C_RED}目录冲突${C_RESET}"
+      FAILED=1
+      return 2
+      ;;
+  esac
 
-  if [ -e "$path" ]; then
-    err "$dir 已存在但不是 git 仓库，请先手动移走"
-    note "  ${key}  ${C_RED}目录冲突${C_RESET}"
+  local desc actual_url
+  desc="$(git -C "$path" describe --tags --always 2>/dev/null || echo '?')"
+  actual_url="$(git -C "$path" config --get remote.origin.url 2>/dev/null || true)"
+
+  # 来源核对：同名目录里放着别的仓库，比缺源码更难排查，一律不动它
+  if [ -n "$actual_url" ] && \
+     [ "$(source_norm_url "$actual_url")" != "$(source_norm_url "$url")" ]; then
+    err "$dir 已存在，但 origin 指向别的仓库"
+    info "当前：$actual_url"
+    info "期望：$url"
+    info "确认要重来：先移走该目录，再跑一次本脚本"
+    note "  ${key}  ${C_RED}来源不符${C_RESET}"
     FAILED=1
-    return 1
+    return 2
   fi
 
-  info "克隆 $url"
+  # 版本核对：只报告，绝不自动切换——切版本会让笔记里的行号全部失效
+  case "$policy" in
+    pinned)
+      local want_sha
+      want_sha="$(git -C "$path" rev-parse --verify --quiet "refs/tags/${ref}^{commit}" 2>/dev/null || true)"
+      if [ -n "$want_sha" ] && [ "$(git -C "$path" rev-parse HEAD 2>/dev/null)" = "$want_sha" ]; then
+        ok "本地已有源码，版本正确（${ref}）"
+        note "  ${key}  已有（${ref}）"
+      else
+        warn "本地已有源码，但当前是 ${desc}，笔记基准是 ${ref}"
+        info "要对齐：git -C \"${dir}\" checkout -B ${ref} refs/tags/${ref}"
+        note "  ${key}  ${C_YELLOW}版本不符${C_RESET}（${desc} ≠ ${ref}）"
+      fi
+      ;;
+    track)
+      local branch
+      branch="$(git -C "$path" symbolic-ref --short -q HEAD 2>/dev/null || true)"
+      if [ "$branch" = "$ref" ]; then
+        ok "本地已有源码，在分支 ${ref}（${desc}）"
+        note "  ${key}  已有（${ref}@${desc}）"
+      else
+        warn "本地已有源码，但在 ${branch:-游离 HEAD} 上，期望分支 ${ref}"
+        info "要对齐：git -C \"${dir}\" checkout ${ref}"
+        note "  ${key}  ${C_YELLOW}分支不符${C_RESET}（${branch:-detached}）"
+      fi
+      ;;
+    *)
+      ok "本地已有源码（${desc}）"
+      note "  ${key}  已有（${desc}）"
+      ;;
+  esac
+  return 0
+}
+
+# ── 确认源码不会被本仓库跟踪 ────────────────────────────────────────────
+# 源码体量 2–3 GB，一旦漏进 .gitignore 被 add 进来，本仓库就废了。
+check_ignored() {
+  local dir="$1"
+  git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || return 0   # 不是 git 仓库就不必查
+  git -C "$ROOT" check-ignore -q "$dir" 2>/dev/null && return 0
+  warn "$dir 未被 .gitignore 忽略，有被误提交进本仓库的风险"
+  info "请在 .gitignore 补一行：/${dir}/"
+  return 1
+}
+
+# ── 下载 ────────────────────────────────────────────────────────────────
+clone_repo() {
+  local key="$1" dir="$2" url="$3" policy="$4" ref="$5" filter="$6"
+  local path="$ROOT/$dir"
+
+  info "下载 $url"
   if [ -n "$filter" ]; then
-    run git clone $filter --quiet "$url" "$path" || { err "克隆失败"; note "  ${key}  ${C_RED}克隆失败${C_RESET}"; FAILED=1; return 1; }
+    run git clone $filter --quiet "$url" "$path" || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
   else
-    run git clone --quiet "$url" "$path" || { err "克隆失败"; note "  ${key}  ${C_RED}克隆失败${C_RESET}"; FAILED=1; return 1; }
+    run git clone --quiet "$url" "$path" || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
   fi
-  [ "$DRY_RUN" -eq 1 ] && { note "  ${key}  [dry-run] 待克隆"; return 0; }
+  [ "$DRY_RUN" -eq 1 ] && { note "  ${key}  [dry-run] 待下载"; return 0; }
 
-  case "$mode" in
-    pinned-tag)
+  case "$policy" in
+    pinned)
       # 用 refs/tags/ 全名，避开同名远端分支造成的歧义
       if run git -C "$path" checkout --quiet -B "$ref" "refs/tags/$ref"; then
-        ok "已钉到 drop ${ref}（本地分支 ${ref}）"
+        ok "已钉到 ${ref}（本地分支 ${ref}）"
       else
         err "checkout tag $ref 失败"; FAILED=1; return 1
       fi
       ;;
-    latest-tag)
+    latest)
       local tag
       tag="$(git -C "$path" tag --sort=-v:refname | head -1)"
       if [ -n "$tag" ] && run git -C "$path" checkout --quiet "$tag"; then
@@ -143,12 +219,12 @@ clone_repo() {
         err "切最新 tag 失败"; FAILED=1; return 1
       fi
       ;;
-    branch)
+    track)
       run git -C "$path" checkout --quiet "$ref" 2>/dev/null
       ok "在分支 $ref"
       ;;
   esac
-  note "  ${key}  ${C_GREEN}已克隆${C_RESET}"
+  note "  ${key}  ${C_GREEN}已下载${C_RESET}"
   return 0
 }
 
@@ -178,8 +254,10 @@ write_exclude() {
 }
 
 # ── 挂载笔记 ────────────────────────────────────────────────────────────
-# 计算从 <链接所在目录> 回到工作区根的相对前缀，保证符号链接与工作区
-# 一起搬家/改名后依然有效（绝对路径链接做不到这点）。
+# 计算从 <链接所在目录，相对工作区根> 回到工作区根的相对前缀，保证符号链接
+# 与工作区一起搬家/改名后依然有效（绝对路径链接做不到这点）。
+# 传入的必须是相对根的完整路径（如 third-party/AFNetworking/Cache），
+# 只数仓库内深度会漏掉 third-party/ 这类中间层。
 rel_prefix() {
   local dir="$1" up="" part
   [ "$dir" = "." ] && { printf ''; return; }
@@ -200,12 +278,14 @@ link_notes() {
     return 0
   fi
 
-  local f rel target link linkdir
+  local f rel target link linkdir linkrel
   while IFS= read -r f; do
     rel="${f#"$src_root"/}"                    # 例：runtime/CLAUDE.md
     link="$ROOT/$dir/$rel"
     linkdir="$(dirname "$rel")"
-    target="$(rel_prefix "$linkdir")../notes/$dir/$rel"
+    linkrel="$dir"                             # 链接所在目录，相对工作区根
+    [ "$linkdir" != "." ] && linkrel="$dir/$linkdir"
+    target="$(rel_prefix "$linkrel")notes/$dir/$rel"
 
     if [ -L "$link" ]; then
       if [ "$(readlink "$link")" = "$target" ] && [ -e "$link" ]; then
@@ -245,18 +325,29 @@ printf '%s源码学习工作区初始化%s  %s\n' "$C_BOLD" "$C_RESET" "$ROOT"
 [ "$CHECK_ONLY" -eq 1 ] && warn "check 模式，只体检不改动"
 [ "$NOTES_ONLY" -eq 1 ] && warn "只挂笔记，不克隆源码"
 
-for spec in "${REPOS[@]}"; do
-  IFS='|' read -r key dir url mode ref filter <<< "$spec"
+for key in "${ALL_TARGETS[@]}"; do
   wants "$key" || continue
+  source_lookup "$key" || continue
 
-  hdr "${key}（${dir}）"
-  if [ "$NOTES_ONLY" -eq 0 ] && [ "$CHECK_ONLY" -eq 0 ]; then
-    clone_repo "$key" "$dir" "$url" "$mode" "$ref" "$filter" || continue
-  elif [ ! -d "$ROOT/$dir/.git" ]; then
-    warn "$dir 未克隆（去掉 --notes-only / --check 即可克隆）"
-  fi
-  write_exclude "$dir"
-  link_notes "$dir"
+  hdr "${SRC_KEY}（${SRC_DIR}）"
+
+  # 先核对本地：已有就不重复下载，缺了才下载
+  inspect_local "$SRC_KEY" "$SRC_DIR" "$SRC_URL" "$SRC_POLICY" "$SRC_REF"
+  case $? in
+    2) continue ;;                       # 目录冲突 / 来源不符，人工处理
+    1)
+      if [ "$NOTES_ONLY" -eq 1 ] || [ "$CHECK_ONLY" -eq 1 ]; then
+        warn "本地没有源码（去掉 --notes-only / --check 即可下载）"
+        note "  ${SRC_KEY}  ${C_YELLOW}缺源码${C_RESET}"
+      else
+        clone_repo "$SRC_KEY" "$SRC_DIR" "$SRC_URL" "$SRC_POLICY" "$SRC_REF" "$SRC_FILTER" || continue
+      fi
+      ;;
+  esac
+
+  check_ignored "$SRC_DIR"
+  write_exclude "$SRC_DIR"
+  link_notes "$SRC_DIR"
 done
 
 printf '\n%s摘要%s\n' "$C_BOLD" "$C_RESET"

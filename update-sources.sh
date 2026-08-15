@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# update-sources.sh —— 更新「源码学习」工作区里的全部 Apple 源码仓库
+# update-sources.sh —— 更新「源码学习」工作区里的全部源码仓库
 #
 #   ./update-sources.sh          更新全部
 #   ./update-sources.sh -n       演练，只报告不改动
@@ -8,8 +8,10 @@
 #   ./update-sources.sh libdispatch foundation    只更新指定目标
 #   ./update-sources.sh -h       帮助
 #
-# 目标：objc4 / libdispatch / foundation / cf
-# 策略见每个 update_* 函数上方注释。
+# 目标（Apple 底层）：objc4 / libdispatch / libdispatch-apple / foundation / cf
+# 目标（第三方库）：  afnetworking / jsonmodel / sdwebimage
+# 目标清单与各自的更新策略都在同目录的 sources.sh，三个脚本共用。
+# 本脚本只更新**已经下载过**的源码；没下载的会提示去跑 bootstrap.sh，不会顺手替你下。
 #
 # 想先知道「到底需不需要更新」，用同目录的 ./check-updates.sh
 # （只读远端、不改工作区、输出一行、带缓存）。
@@ -17,6 +19,14 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 源码清单：与 bootstrap.sh / check-updates.sh 共用的单一事实来源
+if [ ! -f "$ROOT/sources.sh" ]; then
+  printf '缺少 sources.sh（源码清单），无法继续\n' >&2
+  exit 1
+fi
+# shellcheck source=sources.sh
+. "$ROOT/sources.sh"
 
 DRY_RUN=0
 FORCE=0
@@ -56,7 +66,7 @@ usage() {
 # ── 通用 git 更新 ───────────────────────────────────────────────────────
 # $1 目录名  $2 显示名  $3 模式：
 #   pull（默认）  fetch 后对 tracking 分支做 merge --ff-only
-#   fetch-only    只 fetch 并报告有无新 tag，永不动工作区（用于 objc4）
+#   fetch-only    只 fetch 并报告有无新 tag，永不动工作区（用于 objc4 与三份第三方库）
 #   latest-tag    fetch 后自动 checkout 到版本号最高的 tag（用于 Apple drop 仓库）
 update_git_repo() {
   local dir="$ROOT/$1" name="$2" mode="${3:-pull}"
@@ -96,10 +106,10 @@ update_git_repo() {
     latest_tag="$(git -C "${dir}" tag --sort=-v:refname 2>/dev/null | head -1)"
     [ -n "${latest_tag}" ] && info "远端最新 tag: ${latest_tag}"
     if [ -n "${latest_tag}" ] && ! git -C "${dir}" merge-base --is-ancestor "${latest_tag}" HEAD 2>/dev/null; then
-      warn "有更新的 drop（${latest_tag}）未合入当前分支"
-      note "  ${name}  ${C_YELLOW}发现新 drop ${latest_tag}${C_RESET}（需手动 checkout / rebase）"
+      warn "有更新的版本（${latest_tag}）未合入当前分支"
+      note "  ${name}  ${C_YELLOW}发现新版本 ${latest_tag}${C_RESET}（需手动 checkout / rebase）"
     else
-      ok "已是最新 drop"
+      ok "已是最新版本"
       note "  ${name}  已最新（${branch} @ ${before}）"
     fi
     return
@@ -203,7 +213,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-[ ${#TARGETS[@]} -eq 0 ] && TARGETS=(objc4 libdispatch libdispatch-apple foundation cf)
+ALL_TARGETS=()
+while IFS= read -r k; do ALL_TARGETS+=("$k"); done < <(source_all_keys)
+[ ${#TARGETS[@]} -eq 0 ] && TARGETS=("${ALL_TARGETS[@]}")
 
 wants() {
   local t
@@ -211,34 +223,44 @@ wants() {
   return 1
 }
 
+for t in "${TARGETS[@]}"; do
+  source_lookup "$t" || { err "未知目标 ${t}（可用：${ALL_TARGETS[*]}）"; exit 1; }
+done
+
 # ── 主流程 ──────────────────────────────────────────────────────────────
 printf '%s源码学习工作区更新%s  %s\n' "$C_BOLD" "$C_RESET" "$ROOT"
 [ "$DRY_RUN" -eq 1 ] && warn "dry-run 模式，不会做任何改动"
 
-if wants objc4; then
-  hdr "objc4（Apple drop，只 fetch 不改工作区）"
-  update_git_repo "new objc4" "objc4" fetch-only
-fi
+# 清单里的策略在这里翻译成更新模式：
+#   pinned → fetch-only  钉住的 tag，只 fetch 报告新版本，永不动工作区
+#   track  → pull        追踪分支，merge --ff-only
+#   latest → latest-tag  自动 checkout 到版本号最高的 tag
+for key in "${ALL_TARGETS[@]}"; do
+  wants "$key" || continue
+  source_lookup "$key" || continue
 
-if wants libdispatch; then
-  hdr "libdispatch（GCD，Swift 开源版）"
-  update_git_repo "libdispatch" "libdispatch"
-fi
+  case "$SRC_POLICY" in
+    pinned) mode=fetch-only ;;
+    latest) mode=latest-tag ;;
+    *)      mode=pull ;;
+  esac
 
-if wants libdispatch-apple; then
-  hdr "libdispatch-apple（GCD，macOS drop）"
-  update_git_repo "libdispatch-apple" "libdispatch-apple" latest-tag
-fi
+  hdr "${SRC_NAME}（$(source_policy_desc "$SRC_POLICY")）"
 
-if wants foundation; then
-  hdr "swift-corelibs-foundation"
-  update_git_repo "swift-corelibs-foundation" "corelibs-foundation"
-fi
+  # 本地核对：没下载过就别 fetch，直接告诉用户去 bootstrap
+  if [ ! -d "$ROOT/$SRC_DIR/.git" ]; then
+    if [ -e "$ROOT/$SRC_DIR" ]; then
+      err "${SRC_DIR} 存在但不是 git 仓库，先移走再跑 ./bootstrap.sh ${SRC_KEY}"
+      note "  ${SRC_NAME}  ${C_RED}目录冲突${C_RESET}"
+    else
+      warn "本地没有源码，先跑 ./bootstrap.sh ${SRC_KEY} 下载"
+      note "  ${SRC_NAME}  ${C_YELLOW}缺源码${C_RESET}"
+    fi
+    continue
+  fi
 
-if wants cf; then
-  hdr "CoreFoundation（Apple drop，上游已停更于 CF-1153.18）"
-  update_git_repo "CF-1153.18-apple" "CoreFoundation"
-fi
+  update_git_repo "$SRC_DIR" "$SRC_NAME" "$mode"
+done
 
 # 本次动过的目标，其 check-updates.sh 缓存作废；没动过的保留，
 # 免得只更新一个目标却把其余四个的缓存一起废掉、下次白跑一趟网络

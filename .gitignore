@@ -1,9 +1,12 @@
-# 五个子目录各自是独立的上游仓库，由 update-sources.sh 独立更新，外层仓库一律不跟踪。
+# 这些子目录各自是独立的上游仓库，由 update-sources.sh 独立更新，外层仓库一律不跟踪。
 /new objc4/
 /libdispatch/
 /libdispatch-apple/
 /swift-corelibs-foundation/
 /CF-1153.18-apple/
+
+# 第三方库源码，同样由 bootstrap.sh 从上游克隆（AFNetworking / JSONModel / SDWebImage）
+/third-party/
 
 # 更新检查脚本的缓存
 /.update-check-cache/

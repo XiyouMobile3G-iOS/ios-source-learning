@@ -10,7 +10,9 @@
 #   ./check-updates.sh objc4 cf  只检查指定目标
 #   ./check-updates.sh -h        帮助
 #
-# 目标：objc4 / libdispatch / libdispatch-apple / foundation / cf
+# 目标（Apple 底层）：objc4 / libdispatch / libdispatch-apple / foundation / cf
+# 目标（第三方库）：  afnetworking / jsonmodel / sdwebimage
+# 目标清单与各自的更新策略都在同目录的 sources.sh，三个脚本共用。
 #
 # 退出码（给 agent 判断用）：
 #   0  全部最新 —— 不需要跑 update-sources.sh
@@ -24,6 +26,14 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE_DIR="$ROOT/.update-check-cache"
+
+# 源码清单：与 bootstrap.sh / update-sources.sh 共用的单一事实来源
+if [ ! -f "$ROOT/sources.sh" ]; then
+  printf 'ERROR 缺少 sources.sh（源码清单）\n' >&2
+  exit 2
+fi
+# shellcheck source=sources.sh
+. "$ROOT/sources.sh"
 
 VERBOSE=0
 FORCE=0
@@ -53,8 +63,13 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-ALL_TARGETS=(objc4 libdispatch libdispatch-apple foundation cf)
+ALL_TARGETS=()
+while IFS= read -r k; do ALL_TARGETS+=("$k"); done < <(source_all_keys)
 [ ${#TARGETS[@]} -eq 0 ] && TARGETS=("${ALL_TARGETS[@]}")
+
+for t in "${TARGETS[@]}"; do
+  source_lookup "$t" || { printf 'ERROR 未知目标 %s（可用：%s）\n' "$t" "${ALL_TARGETS[*]}" >&2; exit 2; }
+done
 
 wants() {
   local t
@@ -124,8 +139,14 @@ run_timeout() {
 check_git_repo() {
   local key="$1" dir="$ROOT/$2" name="$3" mode="$4" out="$TMPDIR_/$1"
 
+  # 本地核对：源码都没下载就别谈更新，直接把该跑的命令给出来
   if [ ! -d "${dir}/.git" ]; then
-    printf 'error\t%s: 不是 git 仓库\n' "$name" > "$out"; return
+    if [ -e "${dir}" ]; then
+      printf 'error\t%s: 目录存在但不是 git 仓库，先移走再跑 ./bootstrap.sh %s\n' "$name" "$key" > "$out"
+    else
+      printf 'error\t%s: 本地没有源码，先跑 ./bootstrap.sh %s\n' "$name" "$key" > "$out"
+    fi
+    return
   fi
 
   local head_sha remote_sha remote_desc
@@ -177,7 +198,7 @@ check_git_repo() {
   fi
 
   if [ "$mode" = "tag-manual" ]; then
-    printf 'notice\t%s: 有新 drop %s（当前 %s）。update-sources.sh 对它只 fetch 不切换，需人工 checkout / rebase\n' \
+    printf 'notice\t%s: 有新版本 %s（当前 %s）。update-sources.sh 对它只 fetch 不切换，需人工 checkout / rebase\n' \
       "$name" "$remote_desc" "$local_desc" > "$out"
     return
   fi
@@ -206,11 +227,20 @@ probe() {  # $1 目标名，其余为检查命令
   "$@" &
 }
 
-wants objc4             && probe objc4             check_git_repo objc4             "new objc4"                 objc4               tag-manual
-wants libdispatch       && probe libdispatch       check_git_repo libdispatch       "libdispatch"               libdispatch         branch
-wants libdispatch-apple && probe libdispatch-apple check_git_repo libdispatch-apple "libdispatch-apple"         libdispatch-apple   tag
-wants foundation        && probe foundation        check_git_repo foundation        "swift-corelibs-foundation" corelibs-foundation branch
-wants cf                && probe cf                check_git_repo cf                "CF-1153.18-apple"          CoreFoundation      branch
+# 清单里的策略在这里翻译成探测模式：
+#   pinned → tag-manual  钉住的 tag，有新版本只提示，不驱使 update-sources.sh（跑了也不会动）
+#   track  → branch      追踪分支
+#   latest → tag         追最新 tag
+for key in "${ALL_TARGETS[@]}"; do
+  wants "$key" || continue
+  source_lookup "$key" || continue
+  case "$SRC_POLICY" in
+    pinned) mode=tag-manual ;;
+    latest) mode=tag ;;
+    *)      mode=branch ;;
+  esac
+  probe "$SRC_KEY" check_git_repo "$SRC_KEY" "$SRC_DIR" "$SRC_NAME" "$mode"
+done
 wait
 
 for key in ${FRESH+"${FRESH[@]}"}; do
