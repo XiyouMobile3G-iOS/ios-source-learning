@@ -1,14 +1,17 @@
-# iOS 底层源码学习工作区
+# iOS 源码学习工作区
 
-给 **AI agent** 用的 Apple 底层源码导航层：objc runtime、CoreFoundation（RunLoop）、libdispatch（GCD）、Foundation。
+给 **AI agent** 用的源码导航层，覆盖两类：
 
-本仓库**不搬运 Apple 源码**，只提供三样东西——而这三样恰恰是"下载了源码却读不动"的真正卡点：
+- **Apple 底层**：objc runtime、CoreFoundation（RunLoop）、libdispatch（GCD）、Foundation
+- **常用第三方库**（都在 `third-party/` 一个文件夹里）：AFNetworking、JSONModel、SDWebImage
+
+本仓库**不搬运任何源码**，只提供三样东西——而这三样恰恰是"下载了源码却读不动"的真正卡点：
 
 | 提供什么 | 解决什么问题 |
 |---|---|
-| **一套手写的源码地图**（`notes/`，22 份、含符号与行号） | `CFRunLoop.c` 3955 行、`queue.c` 9085 行，整读会挤爆 agent 上下文；地图让它直接跳到那几十行 |
-| **一套 agent 行为规范**（`AGENTS.md` / `CLAUDE.md`） | 强制"先核对源码版本再回答"，杜绝 LLM 凭记忆编 runtime 细节 |
-| **一套版本管理脚本**（`bootstrap.sh` / `check-updates.sh` / `update-sources.sh`） | 五份源码分别钉在正确的 drop / 分支上，且能安全跟进上游更新 |
+| **一套手写的源码地图**（`notes/`，52 份、按模块划分、含符号与行号） | `CFRunLoop.c` 3955 行、`queue.c` 9085 行，整读会挤爆 agent 上下文；地图让它直接跳到那几十行 |
+| **一套 agent 行为规范**（`AGENTS.md` / `CLAUDE.md`） | 强制"先核对源码版本再回答"，杜绝 LLM 凭记忆编 runtime 细节，或拿 AFNetworking 2.x 的博客结论讲 4.x |
+| **一套版本管理脚本**（`bootstrap.sh` / `check-updates.sh` / `update-sources.sh`） | 八份源码分别钉在正确的 drop / tag / 分支上，且能安全跟进上游更新 |
 
 配合 Claude Code、Codex 等能读 `AGENTS.md` 的 agent 使用：**clone → bootstrap → 直接提问**，它会自己找到该读哪个文件的哪一段。
 
@@ -22,15 +25,10 @@ cd ios-source-learning
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` 会克隆五份上游源码到各自正确的 ref，并把 `notes/` 里的笔记以符号链接挂回源码树原位。
-**首次约 2–3 GB，视网络需要十几分钟**；可重复运行，已存在的仓库会跳过。
+`bootstrap.sh` 会把八份上游源码下载到各自正确的 ref，并把 `notes/` 里的笔记以符号链接挂回源码树原位。
+**首次约 2–3 GB，视网络需要十几分钟**；可重复运行，**已经下载过的不会重复拉**。
 
-```bash
-./bootstrap.sh --check       # 只体检：缺哪个仓库、哪些笔记没挂上
-./bootstrap.sh -n            # 演练
-./bootstrap.sh objc4 cf      # 只处理指定目标
-./bootstrap.sh --notes-only  # 只重挂笔记，不克隆
-```
+完整用法见下面的[脚本使用说明](#脚本使用说明)。
 
 搭好之后，在这个目录里启动你的 agent，直接问就行：
 
@@ -39,6 +37,12 @@ cd ios-source-learning
 > `dispatch_async` 到主队列，最终是谁把 block 跑起来的？
 >
 > objc 的 `isa` 里那些位分别是什么，arm64 和 x86_64 有什么差别？
+>
+> AFNetworking 4.x 的回调为什么一定回到主线程？序列化又在哪个队列做？
+>
+> JSONModel 是怎么知道一个属性是可选的、数组里该装哪个类的？
+>
+> SDWebImage 的「后进先出」是队列自带的吗？
 
 Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库 → 读那个仓库的笔记拿到行号 → 只读需要的几十行，并给出带 `文件:行号` + 版本号的回答。
 
@@ -50,23 +54,29 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 .
 ├── AGENTS.md            # agent 的总规范与跨仓库索引（人也建议读一遍）
 ├── CLAUDE.md            # Claude Code 入口，指向 AGENTS.md
-├── bootstrap.sh         # 搭建：克隆源码 + 挂载笔记
+├── sources.sh           # ★ 源码清单：三个脚本共用的唯一事实来源
+├── bootstrap.sh         # 搭建：下载源码（先核对本地）+ 挂载笔记
 ├── check-updates.sh     # 只读探测：需不需要更新（秒级、带缓存）
 ├── update-sources.sh    # 执行更新（三种策略，见下）
-├── notes/               # ★ 本仓库唯一的正文：22 份源码地图
+├── notes/               # ★ 本仓库唯一的正文：52 份源码地图
 │   ├── new objc4/                    # 根 + runtime / Messengers / Threading / test / ObjectiveC / objcdt 六份模块记忆
 │   ├── CF-1153.18-apple/             # RunLoop 权威实现的符号行号表
 │   ├── libdispatch-apple/
 │   ├── libdispatch/
-│   └── swift-corelibs-foundation/
+│   ├── swift-corelibs-foundation/
+│   └── third-party/                  # 第三方库地图，每份都是「库根索引 + 模块文档」两级
+│       ├── AFNetworking/             # 索引 + 核心 / UIKit / 测试
+│       ├── JSONModel/                # 索引 + 核心 / 转换 / 网络（废弃）
+│       └── SDWebImage/               # 索引 + Core / Private / MapKit / 测试
 ├── prompts/teaching/    # 教学提示词（渐进式互动讲解 + 面试回答风格）
 ├── docs/plans/          # 上述提示词的设计与实施记录
 │
 └── （以下由 bootstrap.sh 克隆，.gitignore 不跟踪）
     new objc4/  CF-1153.18-apple/  libdispatch-apple/  libdispatch/  swift-corelibs-foundation/
+    third-party/AFNetworking/  third-party/JSONModel/  third-party/SDWebImage/
 ```
 
-### 五份源码的定位
+### 五份 Apple 源码的定位
 
 | 目录 | 内容 | 钉在哪 |
 |---|---|---|
@@ -76,8 +86,96 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 | `libdispatch/` | GCD，Swift 开源版 | `main` |
 | `swift-corelibs-foundation/` | Swift CF + Foundation | `main` |
 
+### 三份第三方库的定位
+
+三份都集中在 `third-party/` 一个文件夹里，与 Apple 源码的顶层目录分开，各自是独立 git 仓库。
+
+| 目录 | 内容 | 钉在哪 |
+|---|---|---|
+| `third-party/AFNetworking/` | 网络库。**4.x 只剩 `NSURLSession` 一条路径，没有常驻 RunLoop 线程**（那是 2.x） | tag `4.0.1` |
+| `third-party/JSONModel/` | JSON↔Model 映射。全库仅 3350 行，是 objc runtime 属性内省的教科书样本 | tag `1.8.0` |
+| `third-party/SDWebImage/` | 图片加载与缓存。5.x 缓存/加载/编解码全部协议化 | tag `5.21.7` |
+
+**它们钉在具体 release tag 上**，理由和 objc4 一样：笔记里的行号按该 tag 写，自动升版会让行号全部失效。
+所以 `update-sources.sh` 对这三份只 fetch、只报告，不改工作区；升版是人工任务（改 `sources.sh` 里的 ref + 校对笔记行号）。
+
 **选型铁律**：研究 iOS/macOS 真实行为时，CoreFoundation 看 `CF-1153.18-apple/`、GCD 看 `libdispatch-apple/`。
 Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真实二进制；反过来查"10.13 之后 CF 怎么演进"只能看 swift-corelibs——Apple 已停止开源 CF。
+
+---
+
+## 脚本使用说明
+
+四个文件，一个清单三个脚本：
+
+| 文件 | 作用 |
+|---|---|
+| `sources.sh` | **源码清单，唯一事实来源**。本身不做事，被三个脚本 `source` 进去 |
+| `bootstrap.sh` | 下载源码 + 挂载笔记（搭工作区） |
+| `check-updates.sh` | 只读探测：需不需要更新（秒级、带缓存） |
+| `update-sources.sh` | 执行更新（只动已下载的源码） |
+
+三个脚本的目标名、目录、上游地址、更新策略**全部来自 `sources.sh`**，
+所以加一份源码只改那里一行，不会出现「改了下载脚本忘了改更新脚本」。全部支持 `-h`。
+
+### `bootstrap.sh`：下载源码
+
+```bash
+./bootstrap.sh                 # 下载缺的 + 挂载笔记（可重复运行）
+./bootstrap.sh sdwebimage      # 只处理指定目标
+./bootstrap.sh objc4 cf        # 多个目标
+./bootstrap.sh --check         # 只体检：本地有什么、缺什么、链接是否完好，不改动
+./bootstrap.sh -n              # 演练，只报告不改动
+./bootstrap.sh --notes-only    # 只重挂笔记，不下载
+```
+
+**下载前会先核对本地**，这也是它可以随便重复跑的原因：
+
+| 本地情况 | 脚本行为 |
+|---|---|
+| 没有该目录 | 下载，并切到清单指定的 ref |
+| 已有且是对的仓库、对的版本 | ✓ 跳过下载，直接挂笔记 |
+| 已有但版本与笔记基准不一致 | ! 报出实际版本，**给出对齐命令但不自动切**（切了笔记行号就废了） |
+| 已有但 `origin` 指向别的仓库 | ✗ 停下不动它，提示先移走该目录（SSH 与 HTTPS 视为同一仓库） |
+| 目录存在但不是 git 仓库 | ✗ 停下不动它，交人工判断 |
+
+**源码不会进入本仓库**：八个源码目录都由 `.gitignore` 忽略，脚本每轮还会用 `git check-ignore`
+逐个复核，漏了会告警并给出该补的那行。所以在工作区里 `git add -A` 也不会把 2–3 GB 源码提交进来。
+
+### `check-updates.sh`：先探测
+
+```bash
+./check-updates.sh          # 一行结论（带 6h 缓存）
+./check-updates.sh -v       # 逐仓库列出本地/远端版本
+./check-updates.sh -f       # 忽略缓存，强制走网络
+./check-updates.sh cf       # 只查指定目标
+```
+
+只用 `git ls-remote` 读远端 refs，**不 fetch、不写 `.git`、不碰工作区**，输出极简以省 agent 上下文。
+退出码见下一节。源码没下载时它会直接告诉你去跑 `./bootstrap.sh <目标>`。
+
+### `update-sources.sh`：再执行
+
+```bash
+./update-sources.sh                        # 全部
+./update-sources.sh libdispatch cf         # 指定目标
+./update-sources.sh -n                     # 演练
+./update-sources.sh -f                     # 允许 stash 后更新脏工作区
+```
+
+**只更新已经下载过的源码**；没下载的会提示去跑 `bootstrap.sh`，不会顺手替你下载。
+
+### 加一份新源码
+
+在 `sources.sh` 的 `SOURCES` 里加一行，字段是
+`目标名|目录名|显示名|上游 URL|策略|ref|clone 附加参数`：
+
+```bash
+"yykit|third-party/YYKit|YYKit|https://github.com/ibireme/YYKit.git|pinned|1.0.9|"
+```
+
+策略三选一：`pinned`（钉 tag，只报告不自动切）、`track`（追分支，ff-only）、`latest`（追最新 tag，自动切）。
+然后在 `.gitignore` 确认该目录被忽略，跑 `./bootstrap.sh yykit` 即可——三个脚本都会自动认识它。
 
 ---
 
@@ -98,17 +196,17 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 | 10 | `UPDATE` | 跑 `./update-sources.sh` 再读 |
 | 2 | `ERROR` | 按"未能更新"处理，声明基于本地版本后作答 |
 
-外加一类 `NOTICE`：有新 drop 但脚本按策略不会自动切（objc4），需人工处理，**不改变退出码**——免得 agent 每轮都被驱使去跑一次注定无效的更新。
+外加一类 `NOTICE`：有新版本但脚本按策略不会自动切（objc4 与三份第三方库），需人工处理，**不改变退出码**——免得 agent 每轮都被驱使去跑一次注定无效的更新。
 
 `update-sources.sh` 对三类仓库用三种策略：
 
 | 目标 | 策略 | 原因 |
 |---|---|---|
-| `objc4` | 只 fetch、报告新 drop，**永不动工作区** | 笔记行号钉在 951.7，自动升级会让全部行号失效 |
+| `objc4` / `afnetworking` / `jsonmodel` / `sdwebimage` | 只 fetch、报告新版本，**永不动工作区** | 钉在指定 tag，自动升级会让笔记里全部行号失效 |
 | `libdispatch` / `foundation` / `cf` | `merge --ff-only` | 干净的 tracking 分支 |
 | `libdispatch-apple` | 自动 checkout 到版本号最高的 tag | drop 代码在 tag 上，`main` 常落后 |
 
-安全约束：工作区脏默认跳过（`-f` 才 stash）、本地领先上游判为分叉只报告、只用 `--ff-only`、fetch 失败自动重试 3 次。两个脚本都接受目标名收窄范围（`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `cf`），`-h` 看完整用法。
+安全约束：工作区脏默认跳过（`-f` 才 stash）、本地领先上游判为分叉只报告、只用 `--ff-only`、fetch 失败自动重试 3 次。两个脚本都接受目标名收窄范围（`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `cf` / `afnetworking` / `jsonmodel` / `sdwebimage`），`-h` 看完整用法。
 
 > 升级源码后行号会变，**笔记里的行号需要同步校对**——这是 objc4 采取"只报告不自动切"策略的原因。
 
@@ -129,6 +227,11 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 - 每份控制在 200 行内，只放**文件表 + 关键符号 + 行号**，不复制源码正文——它的用途是让 agent 少读文件，自己先撑爆上下文就本末倒置了。
 - 引用一律 `文件:行号` + 版本号（两个 Swift 仓库随时在动，最好同时记 commit）。
 - `CLAUDE.md` 放正文、`AGENTS.md` 只做指针（或反过来），成对存在但**内容不重复**，避免 agent 把两份都读进上下文。
+- **按模块分文件，一个模块目录一对**：仓库根那份只做路由（模块表 + 跨模块链路 + 版本纪律），符号表放到各模块目录自己那份里。
+  这样 agent 读完索引就能只取一个模块，而不是把整库的符号表拖进上下文。
+- **文件名只能是 `AGENTS.md` / `CLAUDE.md`**：`bootstrap.sh` 只把这两个名字写进子仓库的 `.git/info/exclude`。
+  换别的名字会让子仓库 `git status` 变脏，`update-sources.sh` 随即按安全策略跳过更新，更新机制会静默失效。
+  所以模块粒度受源码目录结构约束——想再细分，就得先扩展 `bootstrap.sh` 的 `write_exclude`。
 
 改动源码目录本身没有意义——它们是只读研究对象，`update-sources.sh` 会因"工作区脏"而跳过更新。
 
@@ -136,7 +239,8 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 
 ## 关于源码与许可
 
-本仓库内容为原创的学习笔记与工具脚本；Apple 源码本体不在此处，由 `bootstrap.sh` 从各自上游仓库拉取，其许可以上游为准（objc4 / CF / libdispatch 的 Apple drop 遵循 APSL，swift-corelibs-* 遵循 Apache-2.0）。
+本仓库内容为原创的学习笔记与工具脚本；**源码本体一概不在此处**，由 `bootstrap.sh` 从各自上游仓库拉取，其许可以上游为准
+（objc4 / CF / libdispatch 的 Apple drop 遵循 APSL，swift-corelibs-* 遵循 Apache-2.0，AFNetworking / JSONModel 遵循 MIT，SDWebImage 遵循 MIT）。
 
 上游地址：
 
@@ -145,6 +249,9 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 - https://github.com/apple-oss-distributions/libdispatch
 - https://github.com/apple/swift-corelibs-libdispatch
 - https://github.com/apple/swift-corelibs-foundation
+- https://github.com/AFNetworking/AFNetworking
+- https://github.com/jsonmodel/jsonmodel
+- https://github.com/SDWebImage/SDWebImage
 
 ---
 
