@@ -11,7 +11,7 @@
 |---|---|
 | **一套手写的源码地图**（`notes/`，52 份、按模块划分、含符号与行号） | `CFRunLoop.c` 3955 行、`queue.c` 9085 行，整读会挤爆 agent 上下文；地图让它直接跳到那几十行 |
 | **一套 agent 行为规范**（`AGENTS.md` / `CLAUDE.md`） | 强制"先核对源码版本再回答"，杜绝 LLM 凭记忆编 runtime 细节，或拿 AFNetworking 2.x 的博客结论讲 4.x |
-| **一套版本管理脚本**（`bootstrap.sh` / `check-updates.sh` / `update-sources.sh`） | 八份源码分别钉在正确的 drop / tag / 分支上，且能安全跟进上游更新 |
+| **一套版本管理脚本**（`sources.sh` 清单 + `bootstrap.sh` / `check-updates.sh` / `update-sources.sh`） | 八份源码分别钉在正确的 drop / tag / 分支上，下载前先核对本地、能安全跟进上游更新 |
 
 配合 Claude Code、Codex 等能读 `AGENTS.md` 的 agent 使用：**clone → bootstrap → 直接提问**，它会自己找到该读哪个文件的哪一段。
 
@@ -255,4 +255,12 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 
 ---
 
-本仓库地址：<https://github.com/XiyouMobile3G-iOS/ios-source-learning>
+## 参与
+
+仓库地址：<https://github.com/XiyouMobile3G-iOS/ios-source-learning>（XiyouMobile3G-iOS 组织，Public）
+
+- **补笔记 / 修行号**：按上面「贡献笔记」的约定改 `notes/` 下对应文件，提 PR
+- **加一份新源码**：改 `sources.sh` 一行 + `.gitignore` 确认忽略，见「脚本使用说明」
+- **报错或行号对不上**：开 Issue 时请带上版本号（`./check-updates.sh -v` 的输出）与 `文件:行号`
+
+源码升版会让笔记里的行号整片失效，所以升版类 PR 请**同时**附上校对后的行号改动。
