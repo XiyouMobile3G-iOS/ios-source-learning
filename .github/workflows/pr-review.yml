@@ -1,0 +1,21 @@
+# .github/workflows/pr-review.yml (installed by pr-review-swarm deploy)
+# Pinned to dustPyrotechnic/pr-review-swarm@v1.
+# `v1` is a moving major tag — central releases roll out here automatically.
+# To change the pin, re-run `pr-agent deploy --force` (add `--pin-sha` for an immutable pin).
+name: PR Review Swarm
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited, converted_to_draft, closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        required: true
+
+jobs:
+  review:
+    uses: dustPyrotechnic/pr-review-swarm/.github/workflows/reusable-pr-review.yml@v1
+    with:
+      pr_number: ${{ github.event.pull_request.number || inputs.pr_number }}
+      model: 'deepseek-chat'
+    secrets:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
