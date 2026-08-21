@@ -137,7 +137,7 @@ run_timeout() {
 #
 # mode：branch（追 tracking 分支）| tag（追最高版本 tag）| tag-manual（同 tag，但只提示）
 check_git_repo() {
-  local key="$1" dir="$ROOT/$2" name="$3" mode="$4" out="$TMPDIR_/$1"
+  local key="$1" dir="$ROOT/$2" name="$3" mode="$4" ref="${5:-}" out="$TMPDIR_/$1"
 
   # 本地核对：源码都没下载就别谈更新，直接把该跑的命令给出来
   if [ ! -d "${dir}/.git" ]; then
@@ -157,6 +157,10 @@ check_git_repo() {
     branch="$(git -C "$dir" symbolic-ref --short -q HEAD)"
     if [ -z "$branch" ]; then
       printf 'error\t%s: HEAD 处于游离状态，无法按分支比对\n' "$name" > "$out"; return
+    fi
+    # 清单指定了 ref 时以 ref 为准：本地误切到别的分支不算有效的最新版本
+    if [ -n "$ref" ] && [ "$branch" != "$ref" ]; then
+      printf 'error\t%s: 配置要求分支 %s，当前在 %s，请先切回 %s\n' "$name" "$ref" "$branch" "$ref" > "$out"; return
     fi
     remote="$(git -C "$dir" config "branch.${branch}.remote" 2>/dev/null || true)"
     [ -z "$remote" ] && remote=origin
@@ -239,7 +243,7 @@ for key in "${ALL_TARGETS[@]}"; do
     latest) mode=tag ;;
     *)      mode=branch ;;
   esac
-  probe "$SRC_KEY" check_git_repo "$SRC_KEY" "$SRC_DIR" "$SRC_NAME" "$mode"
+  probe "$SRC_KEY" check_git_repo "$SRC_KEY" "$SRC_DIR" "$SRC_NAME" "$mode" "$SRC_REF"
 done
 wait
 

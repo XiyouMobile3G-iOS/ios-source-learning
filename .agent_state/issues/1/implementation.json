@@ -1,0 +1,30 @@
+{
+  "status": "ready_for_verification",
+  "summary": "修复 track 策略未校验 sources.sh ref 的问题：check-updates.sh 在 branch 模式下发网络探测前校验本地分支与 SRC_REF（不符即报 error、退出码 2，提示切回）；update-sources.sh 在 pull 模式 fetch 前做同样校验并跳过（不 fetch 不合并），游离 HEAD 显示为「游离 HEAD」。两个脚本的调用点把 $SRC_REF 传入函数，AGENTS.md/README.md 同步说明分支不符不是网络故障、应转达用户切回。隔离仓库回归（分支不符、正确分支、正常更新、游离 HEAD、-n/-f 旁路）与真实仓库冒烟全部通过。",
+  "changes": [
+    "check-updates.sh: check_git_repo 增加 ref 参数（第 5 位，缺省为空），branch 模式在游离 HEAD 检查后插入分支与 SRC_REF 的比对，不符时输出 error 状态明细并提前返回（不发网络探测、不进缓存）；probe 调用点追加 $SRC_REF",
+    "update-sources.sh: update_git_repo 增加 ref 参数（第 4 位，缺省为空），pull 模式在 fetch 重试循环前校验当前分支与 SRC_REF，不符时 err+note 摘要「分支不符」并 return（-f/-n 均不旁路）；主流程调用点追加 $SRC_REF",
+    "AGENTS.md: 退出码表第 2 行与后续段落补充「配置要求分支…请先切回」的分支不符例外（转达用户切回，不按网络故障重试、不自行 checkout）",
+    "README.md: 更新机制安全约束补充 track 策略的分支校验行为与正确处置方式"
+  ],
+  "tests": [
+    "bash -n check-updates.sh update-sources.sh: 两脚本语法通过，无输出",
+    "shellcheck -x check-updates.sh update-sources.sh: 仅基线既有告警（SC2100 误报、SC2015/SC2059 info 与 SC2317 间接调用 info），无新增告警",
+    "隔离回归（/tmp/issue1-fix-test，fixture 停在 feature 跟踪 origin/feature，清单 track|main）：bash check-updates.sh --no-cache -v fixture → exit 2，输出「Fixture: 配置要求分支 main，当前在 feature，请先切回 main」",
+    "隔离回归：bash update-sources.sh fixture → 未 fetch 未合并（HEAD 仍为 c2/feature），输出「配置要求分支 main，当前在 feature，请先切回再更新」，摘要「分支不符（feature ≠ main）」",
+    "正确分支回归：fixture checkout main 后 check → exit 0「Fixture: 最新（main@ae166f9）」；update →「已是最新（与 origin/main 同步）」",
+    "正常更新链路回归：remote main 追加 c3 后 check → exit 10「UPDATE … main@ae166f9 → main@3488f79」；update → ff-only 合并成功「已更新 ae166f9 → 3488f79（+1 提交）」，HEAD=c3",
+    "游离 HEAD 回归：git checkout --detach HEAD 后 check → exit 2「HEAD 处于游离状态」；update → 拦截并提示「当前在 游离 HEAD」、摘要「分支不符（游离 HEAD ≠ main）」",
+    "-n/-f 旁路验证：bash update-sources.sh -n fixture 与 -f fixture 均先报分支不符，校验不被旁路",
+    "真实仓库冒烟：./check-updates.sh -v → exit 2，仅 8 条缺源码 error（无网络请求）；./update-sources.sh → exit 0，仅缺源码提示"
+  ],
+  "deviations": [
+    "update-sources.sh 游离 HEAD 的显示映射：计划用 ${branch:-游离 HEAD}，但 rev-parse --abbrev-ref HEAD 在游离态返回字符串 HEAD 而非空，默认展开不生效，改为显式判断 [ \"$branch_disp\" = \"HEAD\" ] && branch_disp=\"游离 HEAD\"（计划风险列表第 5 条已预判此点，属实现细节，方向不变）"
+  ],
+  "remaining_concerns": [
+    "分支不符复用 error 状态后，check 聚合头仍是「ERROR 检查失败，按「未能更新、基于本地版本」处理」，对分支不符措辞略偏；单行明细已说明真因，按最小改动范围取舍（计划已列此风险）",
+    "update-sources.sh 对跳过目标沿用既有退出码恒为 0 的约定，调用方仅凭退出码无法察觉分支不符，需读输出/摘要（与既有「非 git 仓库跳过」路径一致，计划已列此风险）",
+    "CLAUDE.md 未同步：本仓库 CLAUDE.md 与 AGENTS.md 并非镜像关系（CLAUDE.md 是指向 AGENTS.md 的短索引，修改前两者即不同字节），故只改 AGENTS.md 与 README.md，未按合约字面强制两文件字节一致",
+    "仓库无测试基础设施，回归依赖 /tmp 隔离环境手工脚本验证；环境保留在 /tmp/issue1-fix-test 供 reviewer 复核"
+  ]
+}
