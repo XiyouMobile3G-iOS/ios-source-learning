@@ -1,0 +1,11 @@
+{
+  "issue": 1,
+  "round": 1,
+  "max_rounds": 5,
+  "base_ref": "main",
+  "base_sha": "",
+  "provider": "deepseek",
+  "status": "running",
+  "created_at": "2026-08-21T06:43:31Z",
+  "updated_at": "2026-08-21T06:43:31Z"
+}
