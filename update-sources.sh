@@ -69,7 +69,7 @@ usage() {
 #   fetch-only    只 fetch 并报告有无新 tag，永不动工作区（用于 objc4 与三份第三方库）
 #   latest-tag    fetch 后自动 checkout 到版本号最高的 tag（用于 Apple drop 仓库）
 update_git_repo() {
-  local dir="$ROOT/$1" name="$2" mode="${3:-pull}"
+  local dir="$ROOT/$1" name="$2" mode="${3:-pull}" ref="${4:-}"
 
   if [ ! -d "${dir}/.git" ]; then
     err "${name}: $1 不是 git 仓库，跳过"
@@ -83,6 +83,16 @@ update_git_repo() {
   dirty="$(git -C "${dir}" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
 
   info "分支 ${branch} @ ${before}，未提交改动 ${dirty} 处"
+
+  # 清单指定了 ref 时以 ref 为准：本地误切到别的分支就直接停下，
+  # 不 fetch 不合并——更新错误分支会让笔记行号对不上源码。
+  if [ "${mode}" = "pull" ] && [ -n "${ref}" ] && [ "${branch}" != "${ref}" ]; then
+    local branch_disp="$branch"
+    [ "$branch_disp" = "HEAD" ] && branch_disp="游离 HEAD"
+    err "${name}: 配置要求分支 ${ref}，当前在 ${branch_disp}，请先切回再更新（git -C \"${dir}\" checkout ${ref}）"
+    note "  ${name}  ${C_RED}分支不符${C_RESET}（${branch_disp} ≠ ${ref}）"
+    return
+  fi
 
   local attempt=1 fetched=0
   while [ ${attempt} -le "$RETRIES" ]; do
@@ -259,7 +269,7 @@ for key in "${ALL_TARGETS[@]}"; do
     continue
   fi
 
-  update_git_repo "$SRC_DIR" "$SRC_NAME" "$mode"
+  update_git_repo "$SRC_DIR" "$SRC_NAME" "$mode" "$SRC_REF"
 done
 
 # 本次动过的目标，其 check-updates.sh 缓存作废；没动过的保留，

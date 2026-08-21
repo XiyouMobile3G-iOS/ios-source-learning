@@ -46,9 +46,11 @@ AFNetworking / JSONModel / SDWebImage，无论看起来多简单：
 |---|---|---|
 | 0 | `UPTODATE` | 直接读源码，**不要**跑 update-sources.sh |
 | 10 | `UPDATE` | 跑 `./update-sources.sh` 再读 |
-| 2 | `ERROR` | 先申请网络权限，用完全相同的参数重跑一次 `check-updates.sh`；重跑仍返回 2 才视为「未能更新」 |
+| 2 | `ERROR` | 先申请网络权限，用完全相同的参数重跑一次 `check-updates.sh`；重跑仍返回 2 才视为「未能更新」。明细是「配置要求分支…请先切回」时不是网络问题，转达用户切回分支 |
 
 首次检查返回退出码 2 时，可能只是 agent 沙箱无法访问网络或本机代理。agent **必须申请沙箱外网络权限后重跑一次同一条 `check-updates.sh` 命令**，不得改用手动 `git fetch`、`git pull` 或 `git ls-remote` 绕过脚本。只有获得网络权限后的重跑仍返回 2，才声明基于本地版本作答。
+
+例外：ERROR 明细是「配置要求分支 X，当前在 Y，请先切回 X」（track 目标本地所在分支与 `sources.sh` 的 ref 不符）时，与网络无关——把提示原样转达用户、请其切回配置分支，**不要**重试，也**不要**自行 checkout（与「规范零」一致）。`update-sources.sh` 对同一目标也会跳过并提示分支不符。
 
 两个脚本都接受目标名收窄范围：`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `cf` /
 `afnetworking` / `jsonmodel` / `sdwebimage`，如 `./check-updates.sh sdwebimage`。其余参数见脚本 `-h`。

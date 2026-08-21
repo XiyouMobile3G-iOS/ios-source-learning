@@ -1,0 +1,38 @@
+{
+  "status": "ready",
+  "task_type": "bug",
+  "summary": "已完整复现：track 策略下 check-updates.sh 与 update-sources.sh 都未校验 sources.sh 里的 SRC_REF，改用源码目录当前所在分支。在 /tmp 隔离仓库（remote 有 main/feature 两支，fixture 停在 feature 并跟踪 origin/feature，清单配置 track|main）实测：check-updates.sh --no-cache 返回退出码 0 并报『Fixture: 最新（feature@764a0ff）』，update-sources.sh 报『已是最新（与 origin/feature 同步）』——均沿错误分支判定最新。切回 main 后两个脚本行为正确，bootstrap.sh 的 inspect_local（第 160-170 行）已对 track 做分支校验，可作为现成规范。根因是 check-updates.sh 的 branch 模式（第 155-165 行）用当前分支构造 ls-remote 目标、update-sources.sh 的 pull 路径（第 152-160 行）用当前分支的 @{u}，两者调用点（check 第 242 行、update 第 262 行）都没把 $SRC_REF 传入函数。",
+  "evidence": [
+    "隔离复现（/tmp/issue1-repro，本地 bare remote + fixture 停在 feature、跟踪 origin/feature，sources.sh 配置 Fixture|fixture|track|main）：bash check-updates.sh --no-cache -v fixture 输出『UPTODATE 全部最新… Fixture: 最新（feature@764a0ff）』exit=0；bash update-sources.sh fixture 输出『已是最新（与 origin/feature 同步）』exit=0——与 issue 描述的实际结果一致",
+    "对照：fixture checkout main 后，check 输出『Fixture: 最新（main@1ba41b6）』exit=0，update 输出『已是最新（与 origin/main 同步）』——证明脚本按当前分支而非配置 ref 工作",
+    "check-updates.sh 第 155-165 行：branch 模式用 git symbolic-ref --short HEAD 取本地分支，再 ls-remote refs/heads/${branch}，全程无 SRC_REF；第 242 行 probe 调用只传 5 个参数（key/dir/name/mode），未传 $SRC_REF",
+    "update-sources.sh 第 152-160 行：pull 路径用 git rev-parse --abbrev-ref '@{u}' 取当前分支上游做 behind/ahead 与 ff-only 合并，无 SRC_REF 校验；第 262 行 update_git_repo 只传 3 个参数",
+    "bootstrap.sh 第 160-170 行：track 策略在 inspect_local 中比较 [ \"$branch\" = \"$ref\" ]，不符时报『分支不符（feature）』——现有正确实现可作为修复参照",
+    "check-updates.sh 聚合逻辑（第 250-277 行）：error 状态归入 ERRORS，输出 ERROR 头、退出码 2——分支不符可直接复用 error 状态得到 issue 期望的『ERROR，请先切回』",
+    "bash -n 两个脚本通过；shellcheck 基线仅 3 条既有告警（SC2100 误报、SC2015/SC2059 info），无 CI 强制 shellcheck，仓库无测试基础设施",
+    "仓库当前 HEAD 1fe4f7e 相对 issue 验证版本 4159adde 只有 chore 提交，相关脚本未变"
+  ],
+  "root_cause_or_rationale": "根因：两个脚本对 track 策略的处理都把「源码目录当前所在分支」当作追踪分支，未与 sources.sh 单一事实来源中的 SRC_REF 比对。check-updates.sh 的 check_git_repo 在 branch 模式取当前分支拼 refs/heads/${branch} 探测远端（第 155-165 行），update-sources.sh 的 update_git_repo 在 pull 模式用当前分支的 @{u} 计算落后/领先并 ff-only 合并（第 152-160 行）；且两处调用点（check 第 242 行、update 第 262 行）都没有把 $SRC_REF 作为参数传入，函数内部也从未读取。因此本地误切分支时检查仍报最新、更新仍拉错分支的上游。bootstrap.sh 已实现同样校验（第 160-170 行），说明这是遗漏而非设计意图。",
+  "implementation_plan": [
+    "check-updates.sh 第 242 行：probe 调用追加第 5 个参数 $SRC_REF，改为 probe \"$SRC_KEY\" check_git_repo \"$SRC_KEY\" \"$SRC_DIR\" \"$SRC_NAME\" \"$mode\" \"$SRC_REF\"；第 139-140 行函数签名增加 local ref=\"${5:-}\"（保持 out=\"$TMPDIR_/$1\" 不变）",
+    "check-updates.sh branch 模式：在第 157-160 行游离 HEAD 检查之后、取 remote 之前，插入校验：if [ -n \"$ref\" ] && [ \"$branch\" != \"$ref\" ]; then printf 'error\\t%s: 配置要求分支 %s，当前在 %s，请先切回 %s\\n' \"$name\" \"$ref\" \"$branch\" \"$ref\" > \"$out\"; return; fi。复用 error 状态即可得到退出码 2 与聚合输出的 ERROR 块（单行格式承载 issue 期望的『配置要求/当前分支/请切回』三点信息）",
+    "update-sources.sh 第 262 行：调用改为 update_git_repo \"$SRC_DIR\" \"$SRC_NAME\" \"$mode\" \"$SRC_REF\"；第 71-72 行函数签名增加 local ref=\"${4:-}\"",
+    "update-sources.sh：在第 85 行 info \"分支 …\" 之后、fetch 重试循环之前插入校验（提前失败，避免白跑网络）：if [ \"${mode}\" = \"pull\" ] && [ -n \"${ref}\" ] && [ \"${branch}\" != \"${ref}\" ]; then err \"${name}: 配置要求分支 ${ref}，当前在 ${branch:-游离 HEAD}，请先切回再更新（git -C \\\"${dir}\\\" checkout ${ref}）\"; note \"  ${name}  ${C_RED}分支不符${C_RESET}（${branch:-游离 HEAD} ≠ ${ref}）\"; return; fi。注意 rev-parse --abbrev-ref HEAD 在游离状态返回 HEAD，可映射为『游离 HEAD』字样；该检查不因 -f 或 -n 旁路",
+    "文档同步（保持 agent 行为契约一致）：README.md『更新机制』一节与 AGENTS.md 退出码表（约第 45-49 行）补充说明——track 目标当前分支与 sources.sh 的 ref 不符时，check-updates.sh 报 ERROR（退出码 2）并提示切回，此时应转达用户切换分支而非按网络故障重试；update-sources.sh 对 track 目标同样校验，分支不符时跳过并给出明确提示"
+  ],
+  "validation_plan": [
+    "语法与静态检查：bash -n check-updates.sh update-sources.sh；shellcheck -x check-updates.sh update-sources.sh（不新增错误；基线 SC2100/SC2015/SC2059 除外）",
+    "隔离回归（与本次复现相同的 /tmp 环境，remote 有 main/feature，fixture 在 feature 跟踪 origin/feature，sources.sh 配置 Fixture|fixture|track|main）：bash $T/check-updates.sh --no-cache -v fixture 必须退出码 2，输出含『Fixture: 配置要求分支 main，当前在 feature，请先切回 main』；bash $T/update-sources.sh fixture 必须不 fetch、不合并，输出含『配置要求分支 main，当前在 feature』与摘要『分支不符（feature ≠ main）』",
+    "正确分支回归：git -C $T/fixture checkout main 后，check 退出码 0 且报『Fixture: 最新（main@…）』，update 报『已是最新（与 origin/main 同步）』",
+    "正常更新路径回归：在 remote 的 main 上追加一个提交并 push，check 退出码 10（UPDATE），update 成功 ff-only 合并到新提交——证明修复未破坏原有更新链路",
+    "游离 HEAD 回归：git -C $T/fixture checkout --detach HEAD 后，check 仍报游离状态错误、update 被分支校验拦截，两个脚本都不误判为最新",
+    "真实仓库冒烟：在无源码的仓库里跑 ./check-updates.sh -v，各目标应报缺源码 error（本地无 .git 时先于分支校验返回，不受影响），退出码 2"
+  ],
+  "risks": [
+    "复用 error 状态后，聚合头仍是『ERROR 检查失败，按「未能更新、基于本地版本」处理』，对分支不符而言『检查失败』措辞略偏；单行明细已说明真因，如需更精确可另加 mismatch 状态桶，但会扩大改动面，本计划按最小范围取舍",
+    "update-sources.sh 对跳过目标沿用既有约定（退出码恒为 0），调用方无法仅凭退出码察觉分支不符，需读输出/摘要；与既有『非 git 仓库跳过』等路径一致",
+    "AGENTS.md 现规定退出码 2 先申请网络权限重跑，若不同步文档，agent 面对分支不符的 ERROR 会做无谓的重试；已列入文档同步步骤",
+    "shellcheck 基线存在 3 条既有告警且无 CI 门禁，新改动沿用现有风格即可，不必顺带清理旧告警",
+    "游离 HEAD 时 update-sources.sh 的 branch 变量值为 HEAD，直接对比会报『当前在 HEAD』；计划中已要求映射为『游离 HEAD』措辞，实现时需留意"
+  ]
+}

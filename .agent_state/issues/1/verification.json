@@ -1,0 +1,30 @@
+{
+  "status": "pass",
+  "summary": "独立复核通过：check-updates.sh 与 update-sources.sh 均已实现 track 策略的 SRC_REF 分支校验。在隔离仓库（fixture 停在 feature 并跟踪 origin/feature，清单配置 track|main）实测：check-updates.sh --no-cache -v fixture 退出码 2 并输出「Fixture: 配置要求分支 main，当前在 feature，请先切回 main」，update-sources.sh 不 fetch 不合并（HEAD 保持 531a734 不变）并给出「分支不符（feature ≠ main）」摘要，与 issue 预期一致。正确分支、正常 ff-only 更新链路、游离 HEAD、-n/-f 旁路、真实仓库冒烟与静态检查均通过。发现一个缓存回放边界缺口（见 findings），属既有缓存语义、不影响本 issue 验收条件。",
+  "tests": [
+    "bash -n check-updates.sh update-sources.sh: 通过，无输出",
+    "shellcheck -x check-updates.sh update-sources.sh: 仅既有告警类别（SC2100 warning 误报、SC2015/SC2059/SC2086/SC1091 info、SC2317 info 计数 86→91 因新增 5 行代码），无新告警类别",
+    "隔离复现（/tmp/issue1-fix-test，fixture 在 feature 跟踪 origin/feature，track|main）：bash check-updates.sh --no-cache -v fixture → exit 2，输出「ERROR … Fixture: 配置要求分支 main，当前在 feature，请先切回 main」",
+    "隔离复现：bash update-sources.sh fixture → exit 0（沿用跳过目标既有约定），无「已 fetch」行、HEAD 仍为 531a734（c2/feature），输出含「配置要求分支 main，当前在 feature，请先切回再更新」与摘要「分支不符（feature ≠ main）」",
+    "正确分支回归：fixture checkout main 后 check → exit 0「Fixture: 最新（main@3488f79）」；update →「已是最新（与 origin/main 同步）」exit 0",
+    "正常更新链路回归：向远端 main 推送 c4（4a8dedb）后 check → exit 10「UPDATE … main@3488f79 → main@4a8dedb」；update → ff-only 合并成功，HEAD=4a8dedb",
+    "游离 HEAD 回归：checkout --detach HEAD 后 check → exit 2「HEAD 处于游离状态」；update → 拦截并输出「当前在 游离 HEAD」、摘要「分支不符（游离 HEAD ≠ main）」，无 fetch",
+    "旁路验证：bash update-sources.sh -n fixture 与 -f fixture 均先报分支不符，HEAD 不变",
+    "缓存验证：feature 上 check 出错后 .update-check-cache 未写入任何文件（error 不入缓存，代码 grep '^error' 跳过）",
+    "真实仓库冒烟：./check-updates.sh -v → exit 2，仅 8 条缺源码 error（本地校验先于网络）；./update-sources.sh → exit 0，8 条缺源码提示",
+    "对比确认：/tmp/issue1-fix-test 下的两个脚本与当前工作树逐字节一致（diff 无差异）"
+  ],
+  "acceptance_checks": [
+    "配置 track|main 且当前在 feature 时，check 不应判为最新 → pass - check-updates.sh --no-cache 退出码 2，输出 ERROR「配置要求分支 main，当前在 feature，请先切回 main」，与 issue 预期逐点吻合（配置要求/当前分支/请切回）",
+    "配置 track|main 且当前在 feature 时，update 不应沿错误分支更新 → pass - update-sources.sh 在 fetch 前拦截，无 fetch 无合并，HEAD 不变，摘要「分支不符（feature ≠ main）」",
+    "更新逻辑以 sources.sh 的 SRC_REF 为准 → pass - 两脚本调用点分别传入 $SRC_REF（check 第 246 行 probe 第 5 参、update 第 272 行第 4 参），函数签名已扩展并实际使用",
+    "正确分支时原有功能不被破坏 → pass - main 上 check exit 0 报最新、远端推进后 check exit 10、update ff-only 合并成功",
+    "边界情形：游离 HEAD、-n/-f 旁路 → pass - check 报游离状态 error、update 显示「游离 HEAD」并拦截、-n/-f 不旁路分支校验",
+    "文档同步（AGENTS.md/README.md）→ pass - 退出码表与更新机制章节均补充分支不符处置说明；CLAUDE.md 是指向 AGENTS.md 的短索引，未同步属合理偏差"
+  ],
+  "findings": [
+    "low: 缓存回放缺口——在 main 上跑过 check-updates.sh（ok 结果写入缓存）后切到 feature，默认（带缓存、无 --no-cache）运行仍回放缓存判定「UPTODATE … Fixture: 最新（main@4a8dedb）」exit 0，分支守卫不执行（probe 未运行）。issue 复现步骤明确使用 --no-cache，故不阻塞本 issue；但 AGENTS.md 约定退出码 0 即「直接读源码」，TTL（默认 6h）内切错分支的 agent/用户仍可能被引导读错误分支。此为既有缓存语义（按目标名缓存探测结果），不在本次最小改动范围；建议后续将当前分支纳入缓存键或回放前快速校验分支",
+    "info: 实现报告称 shellcheck「无新增告警」，严格看 SC2317 info 计数由 86 增至 91（新增 5 行代码被 shellcheck 误判不可达），但同属既有误报类别、无新告警类型，不影响判定",
+    "info: 分支不符复用 error 状态后，check 聚合头仍为「ERROR 检查失败，按『未能更新、基于本地版本』处理」，对分支不符场景措辞略偏（单行明细已说明真因）；update-sources.sh 对跳过目标沿用退出码恒为 0 的约定，仅凭退出码无法察觉分支不符。二者均已在实现报告 remaining_concerns 中明示，属可接受的取舍"
+  ]
+}
