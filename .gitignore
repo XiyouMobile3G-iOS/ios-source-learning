@@ -11,4 +11,5 @@
 # 更新检查脚本的缓存
 /.update-check-cache/
 
+# macOS Finder 自动生成的目录元数据文件，与项目内容无关，不应提交进仓库
 .DS_Store

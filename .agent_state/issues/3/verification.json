@@ -1,0 +1,24 @@
+{
+  "status": "pass",
+  "summary": "已独立复核工作区与 git diff：`.gitignore` 中 `.DS_Store` 忽略条目自初始提交即存在且经 `git check-ignore` 实测对任意层级路径生效（exit=0），实现仅在条目上方新增一行中文注释说明原因（第 14 行，UTF-8、无行尾空白），其余 13 行零改动，工作区被修改的跟踪文件仅 `.gitignore` 一个，未产生任何提交。",
+  "tests": [
+    "git check-ignore -v .DS_Store: 输出 .gitignore:15:.DS_Store，exit=0；git check-ignore -v notes/.DS_Store 同样命中第 15 行（规则无前导斜杠，任意层级生效），exit=0",
+    "git check-ignore -v \"new objc4/.DS_Store\": 命中第 2 行 /new objc4/ 目录规则，exit=0",
+    "git diff -- .gitignore: 仅 +1 行注释，其余内容零变动；git diff --stat 显示 1 file changed, 1 insertion(+)",
+    "git status --porcelain / git diff HEAD --name-only: 仅 M .gitignore 一个跟踪文件被修改；未跟踪文件仅管线自有的 .agent_state/issues/3/ 下两个 JSON；HEAD 仍为 57113ba，实现未提交",
+    "git diff --check: exit=0，无空白错误；cat -A 确认末行 .DS_Store$ 带换行，新增注释行同样以 $ 结尾；file 判定为 UTF-8 Unicode text",
+    "git check-ignore -v 逐项复核其余 7 条既有规则（new objc4、CF-1153.18-apple、libdispatch-apple、libdispatch、swift-corelibs-foundation、third-party、.update-check-cache 的路径）: 全部命中对应行，exit=0",
+    "git ls-files | grep -i ds_store 与 git log --all 历史扫描: 均无结果，仓库历史与被跟踪文件中不存在 .DS_Store；find . -name '.DS_Store' -not -path './.git/*': 工作区无残留文件",
+    "./bootstrap.sh --check: exit=0，摘要仅报告源码目录未克隆（本环境未搭建源码），无新增异常"
+  ],
+  "acceptance_checks": [
+    ".gitignore 已忽略 .DS_Store: pass - git check-ignore -v .DS_Store 命中第 15 行且 exit=0，notes/.DS_Store 等任意层级路径同样命中",
+    "条目附一行注释说明原因: pass - 第 14 行新增「# macOS Finder 自动生成的目录元数据文件，与项目内容无关，不应提交进仓库」，一行中文、UTF-8、紧贴条目且上方保留空行，与文件内既有注释风格一致",
+    "改动范围仅限 .gitignore 一个文件: pass - git diff HEAD --name-only 仅 .gitignore；git diff --stat 为 1 file changed, 1 insertion(+)；其余 13 行经 diff 与 check-ignore 复核零变动"
+  ],
+  "findings": [
+    "info: 严格字面解读下 issue 是条件句「如果没有，加上并附一行注释」，而条目自初始提交已存在，本次仅补齐注释；该解读歧义已由分析师与实现者如实记录并留待 reviewer 裁定，改动本身不越出 issue 声明的 .gitignore 单文件范围、无破坏性",
+    "info: ./bootstrap.sh --check 对五个 Apple 源码目录输出「未被 .gitignore 忽略」警告，但已用临时仓库对照证明 main 版 .gitignore 下 `git check-ignore -q`（裸目录名、目录不存在时）同样 exit=1，属缺失目录导致的既有现象而非本次改动引入的回归；目录路径带子路径时全部正常命中",
+    "info: 实现未产生任何提交（HEAD 仍为 57113ba），符合本管线「不提交、不推送、不创建 PR」的约束；PR-review-swarm 评审链路的验证不在本角色权限内"
+  ]
+}

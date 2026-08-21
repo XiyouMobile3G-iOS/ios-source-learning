@@ -1,0 +1,28 @@
+{
+  "status": "ready",
+  "task_type": "build_ci",
+  "summary": "`.gitignore` 自初始提交 09961f6 起已包含 `.DS_Store` 条目（第 14 行，文件末行，以换行结尾），`git check-ignore` 实测对任意层级路径均命中该规则（exit=0），且仓库历史与工作区中均无被跟踪或残留的 `.DS_Store` 文件；但该条目上方没有任何注释，与 issue 描述的最终形态（忽略条目 + 一行说明原因的中文注释）相比仅缺注释。因此只需在 `.gitignore` 内为该既有条目补一行注释，其余内容一律不动。",
+  "evidence": [
+    "`git check-ignore -v .DS_Store` 输出 `.gitignore:14:.DS_Store\t.DS_Store`，exit=0；`git check-ignore -v notes/.DS_Store` 同样命中第 14 行规则（规则不带前导斜杠，任意层级生效）；`new objc4/.DS_Store` 由第 2 行目录规则 `/new objc4/` 覆盖，exit=0。",
+    "`git blame -L 14,14 -- .gitignore` 显示该行由初始提交 `09961f6`（笑尘 2026-08-04）加入，且上方无注释；`git log --all -- .gitignore` 显示此后无任何提交改动过该行。",
+    "`git ls-files | grep -i ds_store` 无结果（历史中无被跟踪的 .DS_Store）；`find . -name \".DS_Store\" -not -path \"./.git/*\"` 无结果（工作区不存在该文件，无需清理）。",
+    "`wc -l .gitignore` 为 14 行，`cat -A` 确认末行 `.DS_Store$` 带换行；`git diff main -- .gitignore` 为空，工作分支与 main 内容一致。",
+    "`.gitignore` 内既有注释均为一行中文、紧贴其下条目（如 `# 更新检查脚本的缓存` 直接位于 `/.update-check-cache/` 上方），新注释应沿用该风格。"
+  ],
+  "root_cause_or_rationale": "非 bug。issue 的条件分支『如果没有，加上』实际不成立——忽略规则自初始提交起已存在且经 check-ignore 验证生效；但 issue 将『并附一行注释说明原因』作为交付形态的一部分描述，当前条目缺该注释，且『范围仅限 `.gitignore` 一个文件』暗示预期有一次编辑。作为装载 agent-cycle / PR-review-swarm 后的端到端冒烟测试，为既有条目补一行说明注释是唯一剩余、且不越出 `.gitignore` 范围的最小实现增量。",
+  "implementation_plan": [
+    "编辑 `.gitignore`：在第 14 行 `.DS_Store` 上方插入一行中文注释，说明忽略原因，例如 `# macOS Finder 自动生成的目录元数据文件，与项目内容无关，不应提交进仓库`（一行，沿用文件内注释紧贴条目的风格，注释上方保留原有空行以分隔小节）。",
+    "保留 `.DS_Store` 条目本身及其余 13 行完全不变；范围仅限 `.gitignore` 一个文件，尤其不要改动 `/new objc4/`、`/libdispatch/`、`/third-party/` 等源码目录忽略规则（bootstrap.sh 每轮用 `git check-ignore` 复核它们）。",
+    "确认改动后文件仍以换行结尾，新增行使用 UTF-8，无行尾空白。"
+  ],
+  "validation_plan": [
+    "`git diff -- .gitignore`：仅新增一行注释，其余内容零变动；`git diff --stat` 与 `git status --short` 确认只有 `.gitignore` 一个文件被修改。",
+    "`git check-ignore -v .DS_Store` 仍命中 `.gitignore`（行号由 14 变为 15），exit=0；`git check-ignore -v notes/.DS_Store` 同样命中，证明规则对任意层级仍生效。",
+    "`git diff --check` 无空白错误；`cat -A .gitignore | tail -2` 确认注释与条目均以 `$`（换行）结尾。"
+  ],
+  "risks": [
+    "解读歧义：issue 的『如果没有，加上并附一行注释』是条件句，而条目已存在，严格字面解读可判为『无需改动』（satisfied）；本分析按 issue 描述的最终形态（条目 + 注释）判定仅差注释。若维护者本意是测试『已满足』短路路径，将额外产生一个仅含一行注释的 PR，但该 PR 不越出 issue 声明的范围、无破坏性。",
+    "注释文案属建议措辞，实现时可微调，但必须保持一行中文、与文件内既有注释风格一致；禁止顺手重排或删除文件中其他条目。",
+    "本次为冒烟测试，改动虽小，实现完成后仍应正常走 PR 评审流程以验证 PR-review-swarm 链路，而不是绕过评审直接合入。"
+  ]
+}
