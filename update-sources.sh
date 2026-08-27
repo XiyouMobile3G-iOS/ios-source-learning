@@ -120,7 +120,10 @@ update_git_repo() {
   # Apple drop 仓库：代码在 tag 上（main 常落后于最新 tag），追最新 tag 而非分支
   if [ "${mode}" = "latest-tag" ]; then
     local latest_tag tag_sha
-    latest_tag="$(git -C "${dir}" tag --sort=-v:refname 2>/dev/null | head -1)"
+    # 本模式会自动 checkout，比 fetch-only 更依赖 tagglob：漏过滤会静默把源码树
+    # 切到非版本号的历史 tag，该仓库地图里的行号全部失效。与 bootstrap.sh 的
+    # latest 分支保持同一套过滤。
+    latest_tag="$(git -C "${dir}" tag --list ${tagglob:+"$tagglob"} --sort=-v:refname 2>/dev/null | head -1)"
     if [ -z "${latest_tag}" ]; then
       warn "没有 tag，退化为只 fetch"
       note "  ${name}  仅 fetch（无 tag）"
