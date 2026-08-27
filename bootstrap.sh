@@ -1,29 +1,30 @@
 #!/bin/bash
 #
-# bootstrap.sh —— 一键把「源码学习」工作区搭起来（下载源码 + 挂载笔记）
+# bootstrap.sh —— 一键把「源码学习」工作区搭起来（下载源码 + 挂载源码地图）
 #
-#   ./bootstrap.sh                 下载缺失的上游源码 + 挂载笔记（可重复运行）
+#   ./bootstrap.sh                 下载缺失的上游源码 + 挂载源码地图（可重复运行）
 #   ./bootstrap.sh -n              演练，只报告不改动
-#   ./bootstrap.sh --notes-only    只重新挂载笔记，不下载
+#   ./bootstrap.sh --maps-only     只重新挂载地图，不下载（旧名 --notes-only 仍可用）
 #   ./bootstrap.sh --check         只体检：本地有什么、缺什么、链接是否完好，不改动
 #   ./bootstrap.sh objc4 cf        只处理指定目标
 #   ./bootstrap.sh -h              帮助
 #
 # 目标见 sources.sh；当前为
-#   Apple 底层：objc4 / libdispatch / libdispatch-apple / foundation / cf
+#   Apple 底层：objc4 / libdispatch / libdispatch-apple / foundation / swift-foundation / cf
+#   参照实现：  gnustep（gnustep-base，非 Apple 代码）
 #   第三方库：  afnetworking / jsonmodel / sdwebimage（下载到 third-party/）
 #
 # 三件事，跑之前先知道：
 #
-# 1. 源码不进本仓库。本仓库只版本管理笔记与脚本；八份源码由本脚本从各自上游
+# 1. 源码不进本仓库。本仓库只版本管理源码地图与脚本；十份源码由本脚本从各自上游
 #    下载到固定 ref，并由 .gitignore 忽略——脚本每轮都会用 git check-ignore
 #    核对这一点，漏了会告警。
 #
 # 2. 下载前先核对本地。已经下载过的不会重复拉（首次 2–3 GB），同时核对
-#    origin 与当前版本：目录里放着别的仓库、或版本与笔记基准不一致，都会明确
-#    报出来并给出对齐命令，但**绝不自动切版本**——切了笔记里的行号就全废了。
+#    origin 与当前版本：目录里放着别的仓库、或版本与地图基准不一致，都会明确
+#    报出来并给出对齐命令，但**绝不自动切版本**——切了地图里的行号就全废了。
 #
-# 3. 笔记的真身在 notes/，以符号链接挂回源码树原位，所以「就地编辑笔记」改的
+# 3. 地图的真身在 maps/，以符号链接挂回源码树原位，所以「就地编辑」改的
 #    仍然是被版本管理的那份文件，不会漂移。
 #
 # 源码清单在同目录的 sources.sh，与 check-updates.sh / update-sources.sh 共用。
@@ -35,7 +36,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DRY_RUN=0
-NOTES_ONLY=0
+MAPS_ONLY=0
 CHECK_ONLY=0
 
 # ── 输出 ────────────────────────────────────────────────────────────────
@@ -83,7 +84,8 @@ TARGETS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     -n|--dry-run)  DRY_RUN=1 ;;
-    --notes-only)  NOTES_ONLY=1 ;;
+    --maps-only)   MAPS_ONLY=1 ;;
+    --notes-only)  MAPS_ONLY=1 ;;   # 旧名，maps/ 改名前的写法，保留兼容
     --check)       CHECK_ONLY=1 ;;
     -h|--help)     usage ;;
     -*)            err "未知参数 $1"; exit 1 ;;
@@ -109,7 +111,7 @@ wants() {
 
 # ── 下载前的本地核对 ────────────────────────────────────────────────────
 # 已经下载过的源码不重复拉（首次 2–3 GB，重下一次代价太大），
-# 但「目录在」不等于「源码对」——还要核对 origin 与版本，否则后面笔记的行号会对不上。
+# 但「目录在」不等于「源码对」——还要核对 origin 与版本，否则后面地图的行号会对不上。
 #
 # 返回：0 本地已有可用源码，跳过下载   1 本地没有，需要下载   2 有冲突，需人工处理
 inspect_local() {
@@ -143,7 +145,7 @@ inspect_local() {
     return 2
   fi
 
-  # 版本核对：只报告，绝不自动切换——切版本会让笔记里的行号全部失效
+  # 版本核对：只报告，绝不自动切换——切版本会让地图里的行号全部失效
   case "$policy" in
     pinned)
       local want_sha
@@ -152,7 +154,7 @@ inspect_local() {
         ok "本地已有源码，版本正确（${ref}）"
         note "  ${key}  已有（${ref}）"
       else
-        warn "本地已有源码，但当前是 ${desc}，笔记基准是 ${ref}"
+        warn "本地已有源码，但当前是 ${desc}，地图基准是 ${ref}"
         info "要对齐：git -C \"${dir}\" checkout -B ${ref} refs/tags/${ref}"
         note "  ${key}  ${C_YELLOW}版本不符${C_RESET}（${desc} ≠ ${ref}）"
       fi
@@ -190,7 +192,7 @@ check_ignored() {
 
 # ── 下载 ────────────────────────────────────────────────────────────────
 clone_repo() {
-  local key="$1" dir="$2" url="$3" policy="$4" ref="$5" filter="$6"
+  local key="$1" dir="$2" url="$3" policy="$4" ref="$5" filter="$6" tagglob="${7:-}"
   local path="$ROOT/$dir"
 
   info "下载 $url"
@@ -212,7 +214,7 @@ clone_repo() {
       ;;
     latest)
       local tag
-      tag="$(git -C "$path" tag --sort=-v:refname | head -1)"
+      tag="$(git -C "$path" tag --list ${tagglob:+"$tagglob"} --sort=-v:refname | head -1)"
       if [ -n "$tag" ] && run git -C "$path" checkout --quiet "$tag"; then
         ok "已切到最新 drop ${tag}（detached HEAD，符合预期）"
       else
@@ -229,7 +231,7 @@ clone_repo() {
 }
 
 # ── .git/info/exclude ───────────────────────────────────────────────────
-# 让挂进来的笔记不出现在子仓库的 git status 里：否则工作区被判为「脏」，
+# 让挂进来的地图不出现在子仓库的 git status 里：否则工作区被判为「脏」，
 # update-sources.sh 会按安全策略跳过合并，更新机制就静默失效了。
 write_exclude() {
   local dir="$1" path="$ROOT/$1" file="$ROOT/$1/.git/info/exclude"
@@ -253,7 +255,7 @@ write_exclude() {
   ok "已补 .git/info/exclude 规则：${missing[*]}"
 }
 
-# ── 挂载笔记 ────────────────────────────────────────────────────────────
+# ── 挂载源码地图 ────────────────────────────────────────────────────────
 # 计算从 <链接所在目录，相对工作区根> 回到工作区根的相对前缀，保证符号链接
 # 与工作区一起搬家/改名后依然有效（绝对路径链接做不到这点）。
 # 传入的必须是相对根的完整路径（如 third-party/AFNetworking/Cache），
@@ -267,25 +269,25 @@ rel_prefix() {
   printf '%s' "$up"
 }
 
-link_notes() {
-  local dir="$1" src_root="$ROOT/notes/$1"
+link_maps() {
+  local dir="$1" src_root="$ROOT/maps/$1"
   local linked=0 broken=0 skipped=0
 
-  [ -d "$src_root" ] || { warn "notes/$dir 不存在，跳过"; return 0; }
+  [ -d "$src_root" ] || { warn "maps/$dir 不存在，跳过"; return 0; }
   if [ ! -d "$ROOT/$dir/.git" ]; then
-    warn "$dir 尚未克隆，笔记暂不挂载"
-    note "  ${dir}  ${C_YELLOW}笔记未挂载${C_RESET}（源码未克隆）"
+    warn "$dir 尚未克隆，地图暂不挂载"
+    note "  ${dir}  ${C_YELLOW}地图未挂载${C_RESET}（源码未克隆）"
     return 0
   fi
 
   local f rel target link linkdir linkrel
   while IFS= read -r f; do
-    rel="${f#"$src_root"/}"                    # 例：runtime/CLAUDE.md
+    rel="${f#"$src_root"/}"                    # 例：runtime/AGENTS.md
     link="$ROOT/$dir/$rel"
     linkdir="$(dirname "$rel")"
     linkrel="$dir"                             # 链接所在目录，相对工作区根
     [ "$linkdir" != "." ] && linkrel="$dir/$linkdir"
-    target="$(rel_prefix "$linkrel")notes/$dir/$rel"
+    target="$(rel_prefix "$linkrel")maps/$dir/$rel"
 
     if [ -L "$link" ]; then
       if [ "$(readlink "$link")" = "$target" ] && [ -e "$link" ]; then
@@ -311,11 +313,11 @@ link_notes() {
   done < <(find "$src_root" -type f -name '*.md' | sort)
 
   if [ "$broken" -eq 0 ] && [ "$skipped" -eq 0 ]; then
-    ok "笔记已就位（${linked} 个链接）"
-    note "  ${dir}  笔记 ${linked} 份"
+    ok "地图已就位（${linked} 个链接）"
+    note "  ${dir}  地图 ${linked} 份"
   else
-    warn "笔记 ${linked} 个正常，${broken} 个缺失/失败，${skipped} 个被占用"
-    note "  ${dir}  ${C_YELLOW}笔记 ${linked}/$((linked + broken + skipped))${C_RESET}"
+    warn "地图 ${linked} 个正常，${broken} 个缺失/失败，${skipped} 个被占用"
+    note "  ${dir}  ${C_YELLOW}地图 ${linked}/$((linked + broken + skipped))${C_RESET}"
   fi
 }
 
@@ -323,7 +325,7 @@ link_notes() {
 printf '%s源码学习工作区初始化%s  %s\n' "$C_BOLD" "$C_RESET" "$ROOT"
 [ "$DRY_RUN" -eq 1 ]    && warn "dry-run 模式，不会做任何改动"
 [ "$CHECK_ONLY" -eq 1 ] && warn "check 模式，只体检不改动"
-[ "$NOTES_ONLY" -eq 1 ] && warn "只挂笔记，不克隆源码"
+[ "$MAPS_ONLY" -eq 1 ] && warn "只挂地图，不克隆源码"
 
 for key in "${ALL_TARGETS[@]}"; do
   wants "$key" || continue
@@ -336,18 +338,18 @@ for key in "${ALL_TARGETS[@]}"; do
   case $? in
     2) continue ;;                       # 目录冲突 / 来源不符，人工处理
     1)
-      if [ "$NOTES_ONLY" -eq 1 ] || [ "$CHECK_ONLY" -eq 1 ]; then
-        warn "本地没有源码（去掉 --notes-only / --check 即可下载）"
+      if [ "$MAPS_ONLY" -eq 1 ] || [ "$CHECK_ONLY" -eq 1 ]; then
+        warn "本地没有源码（去掉 --maps-only / --check 即可下载）"
         note "  ${SRC_KEY}  ${C_YELLOW}缺源码${C_RESET}"
       else
-        clone_repo "$SRC_KEY" "$SRC_DIR" "$SRC_URL" "$SRC_POLICY" "$SRC_REF" "$SRC_FILTER" || continue
+        clone_repo "$SRC_KEY" "$SRC_DIR" "$SRC_URL" "$SRC_POLICY" "$SRC_REF" "$SRC_FILTER" "$SRC_TAGGLOB" || continue
       fi
       ;;
   esac
 
   check_ignored "$SRC_DIR"
   write_exclude "$SRC_DIR"
-  link_notes "$SRC_DIR"
+  link_maps "$SRC_DIR"
 done
 
 printf '\n%s摘要%s\n' "$C_BOLD" "$C_RESET"

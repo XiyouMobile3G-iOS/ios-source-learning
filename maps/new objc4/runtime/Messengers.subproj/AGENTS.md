@@ -1,6 +1,6 @@
-# CLAUDE.md — Messengers.subproj/ 模块记忆
+# Messengers.subproj/ —— 模块地图
 
-`objc_msgSend` 及其变体的各架构汇编实现。上层见 [runtime/CLAUDE.md](../CLAUDE.md)。等价指针文件 `AGENTS.md`。
+`objc_msgSend` 及其变体的各架构汇编实现。上层见 [runtime/AGENTS.md](../AGENTS.md)。等价指针文件 `CLAUDE.md`。
 
 ## 目录
 

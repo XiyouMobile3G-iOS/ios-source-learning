@@ -1,8 +1,8 @@
-# CLAUDE.md — test/ 模块记忆
+# test/ —— 模块地图
 
-objc4 的主测试套件：260+ 个**独立可执行程序**，由 Perl 驱动，不是 XCTest。上层见 [根 CLAUDE.md](../CLAUDE.md)。等价指针文件 `AGENTS.md`。
+objc4 的主测试套件：260+ 个**独立可执行程序**，由 Perl 驱动，不是 XCTest。上层见 [根 AGENTS.md](../AGENTS.md)。等价指针文件 `CLAUDE.md`。
 
-（Swift overlay 的 XCTest 是另一套，见 [ObjectiveC/CLAUDE.md](../ObjectiveC/CLAUDE.md)。）
+（Swift overlay 的 XCTest 是另一套，见 [ObjectiveC/AGENTS.md](../ObjectiveC/AGENTS.md)。）
 
 ## 目录：基础设施文件
 

@@ -8,7 +8,8 @@
 #   ./update-sources.sh libdispatch foundation    只更新指定目标
 #   ./update-sources.sh -h       帮助
 #
-# 目标（Apple 底层）：objc4 / libdispatch / libdispatch-apple / foundation / cf
+# 目标（Apple 底层）：objc4 / libdispatch / libdispatch-apple / foundation / swift-foundation / cf
+# 目标（参照实现）：  gnustep
 # 目标（第三方库）：  afnetworking / jsonmodel / sdwebimage
 # 目标清单与各自的更新策略都在同目录的 sources.sh，三个脚本共用。
 # 本脚本只更新**已经下载过**的源码；没下载的会提示去跑 bootstrap.sh，不会顺手替你下。
@@ -66,10 +67,11 @@ usage() {
 # ── 通用 git 更新 ───────────────────────────────────────────────────────
 # $1 目录名  $2 显示名  $3 模式：
 #   pull（默认）  fetch 后对 tracking 分支做 merge --ff-only
-#   fetch-only    只 fetch 并报告有无新 tag，永不动工作区（用于 objc4 与三份第三方库）
+#   fetch-only    只 fetch 并报告有无新 tag，永不动工作区（用于 objc4、gnustep 与三份第三方库）
 #   latest-tag    fetch 后自动 checkout 到版本号最高的 tag（用于 Apple drop 仓库）
+# $4 tag 过滤 glob（可空）：只在 fetch-only / latest-tag 下用，见 sources.sh
 update_git_repo() {
-  local dir="$ROOT/$1" name="$2" mode="${3:-pull}"
+  local dir="$ROOT/$1" name="$2" mode="${3:-pull}" tagglob="${4:-}"
 
   if [ ! -d "${dir}/.git" ]; then
     err "${name}: $1 不是 git 仓库，跳过"
@@ -100,10 +102,10 @@ update_git_repo() {
   fi
   ok "已 fetch 远端 + tags"
 
-  # objc4 这类「自建分支 + 本地笔记」的仓库只报告，不动工作区
+  # objc4 这类「自建分支 + 本地地图」的仓库只报告，不动工作区
   if [ "${mode}" = "fetch-only" ]; then
     local latest_tag
-    latest_tag="$(git -C "${dir}" tag --sort=-v:refname 2>/dev/null | head -1)"
+    latest_tag="$(git -C "${dir}" tag --list ${tagglob:+"$tagglob"} --sort=-v:refname 2>/dev/null | head -1)"
     [ -n "${latest_tag}" ] && info "远端最新 tag: ${latest_tag}"
     if [ -n "${latest_tag}" ] && ! git -C "${dir}" merge-base --is-ancestor "${latest_tag}" HEAD 2>/dev/null; then
       warn "有更新的版本（${latest_tag}）未合入当前分支"
@@ -259,7 +261,7 @@ for key in "${ALL_TARGETS[@]}"; do
     continue
   fi
 
-  update_git_repo "$SRC_DIR" "$SRC_NAME" "$mode"
+  update_git_repo "$SRC_DIR" "$SRC_NAME" "$mode" "$SRC_TAGGLOB"
 done
 
 # 本次动过的目标，其 check-updates.sh 缓存作废；没动过的保留，

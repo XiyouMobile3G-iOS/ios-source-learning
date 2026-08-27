@@ -10,7 +10,8 @@
 #   ./check-updates.sh objc4 cf  只检查指定目标
 #   ./check-updates.sh -h        帮助
 #
-# 目标（Apple 底层）：objc4 / libdispatch / libdispatch-apple / foundation / cf
+# 目标（Apple 底层）：objc4 / libdispatch / libdispatch-apple / foundation / swift-foundation / cf
+# 目标（参照实现）：  gnustep
 # 目标（第三方库）：  afnetworking / jsonmodel / sdwebimage
 # 目标清单与各自的更新策略都在同目录的 sources.sh，三个脚本共用。
 #
@@ -137,7 +138,7 @@ run_timeout() {
 #
 # mode：branch（追 tracking 分支）| tag（追最高版本 tag）| tag-manual（同 tag，但只提示）
 check_git_repo() {
-  local key="$1" dir="$ROOT/$2" name="$3" mode="$4" out="$TMPDIR_/$1"
+  local key="$1" dir="$ROOT/$2" name="$3" mode="$4" tagglob="${5:-}" out="$TMPDIR_/$1"
 
   # 本地核对：源码都没下载就别谈更新，直接把该跑的命令给出来
   if [ ! -d "${dir}/.git" ]; then
@@ -165,8 +166,10 @@ check_git_repo() {
     remote_desc="${branch}@${remote_sha:0:7}"
   else
     # tag 模式：远端版本号最高的 tag
+    # tagglob 非空时只让 git 返回匹配的 tag——否则仓库里的非版本号历史 tag
+    # 会被 sort -V 排到最高，报出永远消不掉的假「有新版本」（见 sources.sh）。
     local ls tag
-    ls="$(run_timeout "$NET_TIMEOUT" git -C "$dir" ls-remote --tags origin 2>/dev/null)"
+    ls="$(run_timeout "$NET_TIMEOUT" git -C "$dir" ls-remote --tags origin ${tagglob:+"$tagglob"} 2>/dev/null)"
     tag="$(printf '%s' "$ls" | awk '{print $2}' | sed 's|^refs/tags/||; s|\^{}$||' \
            | grep -v '^$' | sort -Vu | tail -1)"
     if [ -n "$tag" ]; then
@@ -239,7 +242,7 @@ for key in "${ALL_TARGETS[@]}"; do
     latest) mode=tag ;;
     *)      mode=branch ;;
   esac
-  probe "$SRC_KEY" check_git_repo "$SRC_KEY" "$SRC_DIR" "$SRC_NAME" "$mode"
+  probe "$SRC_KEY" check_git_repo "$SRC_KEY" "$SRC_DIR" "$SRC_NAME" "$mode" "$SRC_TAGGLOB"
 done
 wait
 

@@ -1,8 +1,8 @@
-# CLAUDE.md — ObjectiveC/ 模块记忆（Swift overlay）
+# ObjectiveC/ —— 模块地图（Swift overlay）
 
-`libswiftObjectiveC.dylib`：Swift 侧的 ObjectiveC 模块 overlay。上层见 [根 CLAUDE.md](../CLAUDE.md)。等价指针文件 `AGENTS.md`。
+`libswiftObjectiveC.dylib`：Swift 侧的 ObjectiveC 模块 overlay。上层见 [根 AGENTS.md](../AGENTS.md)。等价指针文件 `CLAUDE.md`。
 
-测试在同级的 `ObjectiveCTests/`（本文件一并覆盖），是本仓库**唯一的 XCTest**，由 `ObjectiveC.xctestplan` + `ObjectiveC.xcscheme` 驱动；C 侧测试是完全不同的一套，见 [test/CLAUDE.md](../test/CLAUDE.md)。
+测试在同级的 `ObjectiveCTests/`（本文件一并覆盖），是本仓库**唯一的 XCTest**，由 `ObjectiveC.xctestplan` + `ObjectiveC.xcscheme` 驱动；C 侧测试是完全不同的一套，见 [test/AGENTS.md](../test/AGENTS.md)。
 
 ## 目录
 
