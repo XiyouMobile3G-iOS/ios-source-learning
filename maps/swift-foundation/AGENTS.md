@@ -115,7 +115,7 @@ Mutex<[String?               /* Notification name，nil = 通配 */
 
 | 想搞清楚 | 去哪 |
 |---|---|
-| `NotificationCenter` 现在**实际**怎么存、怎么分发 | **本仓库** `NotificationCenter/NotificationCenter.swift` |
+| `NotificationCenter` 现在**实际**怎么存、怎么分发 | **本仓库** `Sources/FoundationEssentials/NotificationCenter/NotificationCenter.swift` |
 | `NSNotification` / `NotificationQueue` 的 ObjC 兼容面 | `../swift-corelibs-foundation/Sources/Foundation/` |
 | ObjC 时代 `NSNotificationCenter` 的经典实现思路 | `../gnustep-base/Source/NSNotificationCenter.m`（**非 Apple 代码**） |
 | RunLoop / CF 对象模型 | `../CF-1153.18-apple/`（权威），本仓库没有 |
