@@ -104,6 +104,11 @@ progress_parse_git_line() {
   return 0
 }
 
+# 终端 stderr，或测试里设了 PROGRESS_FORCE，才画条 / 收尾行。
+progress_active() {
+  [ -t 2 ] || [ -n "${PROGRESS_FORCE:-}" ]
+}
+
 progress_draw() {
   local pct="$1" text="$2"
   local width="${PROGRESS_WIDTH:-24}"
@@ -115,14 +120,14 @@ progress_draw() {
     printf '%s\n' "$msg" >&2
     return 0
   fi
-  if [ -t 2 ] || [ -n "${PROGRESS_FORCE:-}" ]; then
+  if progress_active; then
     printf '\r%s\033[K' "$msg" >&2
   fi
 }
 
 progress_end() {
   [ -n "${PROGRESS_NEWLINE:-}" ] && return 0
-  if [ -t 2 ] || [ -n "${PROGRESS_FORCE:-}" ]; then
+  if progress_active; then
     printf '\n' >&2
   fi
 }
@@ -180,7 +185,7 @@ git_run_progress() {
   shift 3
   local log git_rc=0
 
-  if [ ! -t 2 ] && [ -z "${PROGRESS_FORCE:-}" ]; then
+  if ! progress_active; then
     "$@"
     return $?
   fi

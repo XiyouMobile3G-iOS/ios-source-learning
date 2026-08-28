@@ -46,6 +46,16 @@ assert_fail() {
 PROGRESS_FILL='#'
 PROGRESS_EMPTY='-'
 
+printf '是否画条\n'
+PROGRESS_FORCE=1
+assert_ok 'PROGRESS_FORCE 时画条' progress_active
+unset PROGRESS_FORCE
+if [ -t 2 ]; then
+  assert_ok 'TTY 时画条' progress_active
+else
+  assert_fail '非 TTY 且无 FORCE 不画条' progress_active
+fi
+
 printf '进度条绘制\n'
 assert_eq "$(progress_bar_string 10 0)"   '----------' '0% 全空'
 assert_eq "$(progress_bar_string 10 100)" '##########' '100% 全满'
