@@ -1,6 +1,6 @@
-# CLAUDE.md — objcdt/ 模块记忆
+# objcdt/ —— 模块地图
 
-命令行调试工具，用于 dump 活进程里的 Objective-C runtime 状态。上层见 [根 CLAUDE.md](../CLAUDE.md)。等价指针文件 `AGENTS.md`。
+命令行调试工具，用于 dump 活进程里的 Objective-C runtime 状态。上层见 [根 AGENTS.md](../AGENTS.md)。等价指针文件 `CLAUDE.md`。
 
 ## ⚠️ 本 drop 中是空壳
 

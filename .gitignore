@@ -3,7 +3,11 @@
 /libdispatch/
 /libdispatch-apple/
 /swift-corelibs-foundation/
+/swift-foundation/
 /CF-1153.18-apple/
+
+# GNUstep base（OpenStep 的开源重实现，Foundation 的参照实现，非 Apple 代码）
+/gnustep-base/
 
 # 第三方库源码，同样由 bootstrap.sh 从上游克隆（AFNetworking / JSONModel / SDWebImage）
 /third-party/

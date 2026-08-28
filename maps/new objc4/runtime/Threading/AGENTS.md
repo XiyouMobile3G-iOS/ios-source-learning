@@ -1,6 +1,6 @@
-# CLAUDE.md — Threading/ 模块记忆
+# Threading/ —— 模块地图
 
-runtime 的线程原语抽象层：锁、TLS、锁调试。所有锁与线程本地存储都必须经过这里，**不要**在 runtime 代码里直接调 pthread。上层见 [runtime/CLAUDE.md](../CLAUDE.md)。等价指针文件 `AGENTS.md`。
+runtime 的线程原语抽象层：锁、TLS、锁调试。所有锁与线程本地存储都必须经过这里，**不要**在 runtime 代码里直接调 pthread。上层见 [runtime/AGENTS.md](../AGENTS.md)。等价指针文件 `CLAUDE.md`。
 
 ## 目录
 

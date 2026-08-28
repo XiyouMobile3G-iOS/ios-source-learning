@@ -1,6 +1,6 @@
-# CLAUDE.md — runtime/ 模块记忆
+# runtime/ —— 模块地图
 
-libobjc 的全部实现。上层背景见 [根 CLAUDE.md](../CLAUDE.md)；子模块见 [Messengers.subproj](./Messengers.subproj/CLAUDE.md)（汇编 msgSend）与 [Threading](./Threading/CLAUDE.md)（锁/TLS 抽象）。等价指针文件 `AGENTS.md`。
+libobjc 的全部实现。上层背景见 [根 AGENTS.md](../AGENTS.md)；子模块见 [Messengers.subproj](./Messengers.subproj/AGENTS.md)（汇编 msgSend）与 [Threading](./Threading/AGENTS.md)（锁/TLS 抽象）。等价指针文件 `CLAUDE.md`。
 
 符号名对应 objc4-951.7，定位用 `grep -n '<符号>' runtime/*.mm` 即可；行号会随 drop 漂移，优先按符号找。
 
@@ -13,7 +13,7 @@ libobjc 的全部实现。上层背景见 [根 CLAUDE.md](../CLAUDE.md)；子模
 | retain/release/weak 快路径 | `objc-object.h` | `rootRetain`、`rootRelease`、`rootAutorelease` |
 | NSObject 本体、自动释放池、SideTable | `NSObject.mm` + `NSObject-internal.h` | `AutoreleasePoolPage`、`SideTables()` |
 | 方法缓存 | `objc-cache.mm` + `objc-runtime-new.h` | `cache_t`、`bucket_t`、`cache_hash` |
-| `objc_msgSend` 本身 | `Messengers.subproj/objc-msg-*.s` | 见该目录 CLAUDE.md |
+| `objc_msgSend` 本身 | `Messengers.subproj/objc-msg-*.s` | 见该目录 AGENTS.md |
 | 弱引用表 | `objc-weak.mm/.h` | `weak_register_no_lock`、`weak_clear_no_lock` |
 | 关联对象 | `objc-references.mm` | `_object_set_associative_reference` |
 | `@synchronized` | `objc-sync.mm` | `id2data`、`objc_sync_enter` |

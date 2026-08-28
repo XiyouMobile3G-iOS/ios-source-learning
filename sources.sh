@@ -6,21 +6,30 @@
 # 新增或调整一份源码，**只改这里一行**，三个脚本自动同步；
 # 以前清单抄在三个脚本里，改一处漏两处是最常见的故障。
 #
-# 字段：目标名|目录名|显示名|上游 URL|策略|ref|clone 附加参数
+# 字段：目标名|目录名|显示名|上游 URL|策略|ref|clone 附加参数|tag 过滤 glob
 #
 # 策略（三个脚本各自把它翻译成自己的行为）：
 #
 #   pinned  钉在 ref 指定的 tag 上，并建同名本地分支。
-#           笔记里的行号按这个 tag 写，**自动升版会让全部行号失效**，
+#           maps/ 里的行号按这个 tag 写，**自动升版会让全部行号失效**，
 #           所以：check 只报 NOTICE、update 只 fetch 不切换、bootstrap 发现版本不符只提示。
-#           升版是人工任务：改这里的 ref + 校对笔记行号。
+#           升版是人工任务：改这里的 ref + 校对地图行号。
 #
 #   track   追踪 ref 指定的分支。check 比对该分支远端 HEAD，update 用 merge --ff-only。
 #
 #   latest  追版本号最高的 tag（Apple drop 的代码在 tag 上，main 常落后）。
 #           check 比对最高 tag，update 自动 checkout 过去。
 #
-# clone 附加参数：blob:none 部分克隆用于两个体量大、只读研究的 Swift 仓库。
+# clone 附加参数：blob:none 部分克隆用于历史体量大、只读研究的仓库
+#（两份 Swift Foundation，以及有三十年 CVS 历史的 gnustep-base）。
+# 部分克隆只把**历史**里的 blob 留在远端，checkout 出来的工作区文件是齐的，
+# 离线读源码不受影响。
+#
+# tag 过滤 glob：留空表示「所有 tag 都算版本号」。
+#   仓库里混着非版本号的历史 tag 时必须填，否则 `sort -V` 会把它们排到最高，
+#   于是每次 check-updates.sh 都报一条永远消不掉的假「有新版本」。
+#   gnustep-base 就是这种情况：它有 1998 年的 `start-cvs` 和一堆 `snapshot-9808xx`，
+#   真正的发布 tag 只有 `base-*`。glob 直接交给 git（`tag --list` / `ls-remote --tags`）。
 #
 # 源码目录一律不进本仓库版本管理，由 .gitignore 忽略；bootstrap.sh 会逐个核对这一点。
 
@@ -29,7 +38,9 @@ SOURCES=(
   "libdispatch|libdispatch|libdispatch|https://github.com/apple/swift-corelibs-libdispatch.git|track|main|--filter=blob:none"
   "libdispatch-apple|libdispatch-apple|libdispatch-apple|https://github.com/apple-oss-distributions/libdispatch.git|latest||"
   "foundation|swift-corelibs-foundation|corelibs-foundation|https://github.com/apple/swift-corelibs-foundation.git|track|main|--filter=blob:none"
+  "swift-foundation|swift-foundation|swift-foundation|https://github.com/apple/swift-foundation.git|track|main|--filter=blob:none"
   "cf|CF-1153.18-apple|CoreFoundation|https://github.com/apple-oss-distributions/CF.git|track|main|"
+  "gnustep|gnustep-base|gnustep-base|https://github.com/gnustep/libs-base.git|pinned|base-1_31_1|--filter=blob:none|base-*"
   "afnetworking|third-party/AFNetworking|AFNetworking|https://github.com/AFNetworking/AFNetworking.git|pinned|4.0.1|"
   "jsonmodel|third-party/JSONModel|JSONModel|https://github.com/jsonmodel/jsonmodel.git|pinned|1.8.0|"
   "sdwebimage|third-party/SDWebImage|SDWebImage|https://github.com/SDWebImage/SDWebImage.git|pinned|5.21.7|"
@@ -37,11 +48,12 @@ SOURCES=(
 
 # ── 查询 ────────────────────────────────────────────────────────────────
 # source_lookup <目标名>
-# 命中则把字段写进 SRC_KEY / SRC_DIR / SRC_NAME / SRC_URL / SRC_POLICY / SRC_REF / SRC_FILTER 并返回 0
+# 命中则把字段写进 SRC_KEY / SRC_DIR / SRC_NAME / SRC_URL / SRC_POLICY / SRC_REF /
+# SRC_FILTER / SRC_TAGGLOB 并返回 0（清单里省略末尾字段的行，对应变量为空串）
 source_lookup() {
   local spec
   for spec in "${SOURCES[@]}"; do
-    IFS='|' read -r SRC_KEY SRC_DIR SRC_NAME SRC_URL SRC_POLICY SRC_REF SRC_FILTER <<< "$spec"
+    IFS='|' read -r SRC_KEY SRC_DIR SRC_NAME SRC_URL SRC_POLICY SRC_REF SRC_FILTER SRC_TAGGLOB <<< "$spec"
     [ "$SRC_KEY" = "$1" ] && return 0
   done
   return 1
