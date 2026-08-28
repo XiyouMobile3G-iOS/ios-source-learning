@@ -330,8 +330,8 @@ link_maps() {
   fi
 }
 
-# 先数要下几个。TARGETS 就是 wants 从 ALL_TARGETS 筛出来的那批，
-# 谓词与 inspect_local 相同（source_needs_clone），所以和实际 clone 次数对齐。
+# 先数要下几个。TARGETS 就是 wants 从 ALL_TARGETS 筛出来的那批；只统计不存在的目录，
+# 被占用的目录不计入下载总数，随后仍由 inspect_local 报冲突并跳过。
 CLONE_TOTAL=0
 CLONE_DONE=0
 if [ "$MAPS_ONLY" -eq 0 ] && [ "$CHECK_ONLY" -eq 0 ]; then

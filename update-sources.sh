@@ -108,12 +108,12 @@ update_git_repo() {
     [ ${attempt} -lt "$RETRIES" ] && warn "fetch 第 ${attempt} 次失败，${RETRY_WAIT}s 后重试" && sleep "$RETRY_WAIT"
     attempt=$((attempt + 1))
   done
-  FETCH_DONE=$((FETCH_DONE + 1))
   if [ ${fetched} -ne 1 ]; then
     err "${name}: fetch 连续 $RETRIES 次失败（网络？SSH key？）"
     note "  ${name}  ${C_RED}fetch 失败${C_RESET}"
     return
   fi
+  FETCH_DONE=$((FETCH_DONE + 1))
   ok "已 fetch 远端 + tags"
 
   # objc4 这类「自建分支 + 本地地图」的仓库只报告，不动工作区
