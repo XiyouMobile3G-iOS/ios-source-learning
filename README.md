@@ -61,6 +61,7 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 ├── AGENTS.md            # agent 的总规范与跨仓库索引（人也建议读一遍）
 ├── CLAUDE.md            # → AGENTS.md 的符号链接（同一个文件，两个自动加载入口）
 ├── sources.sh           # ★ 源码清单：三个脚本共用的唯一事实来源
+├── progress.sh          # git clone / fetch 进度条
 ├── bootstrap.sh         # 搭建：下载源码（先核对本地）+ 挂载地图
 ├── check-updates.sh     # 只读探测：需不需要更新（秒级、带缓存）
 ├── update-sources.sh    # 执行更新（三种策略，见下）
@@ -131,11 +132,12 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 
 ## 脚本使用说明
 
-四个文件，一个清单三个脚本：
+一个清单、三个脚本、一份进度条：
 
 | 文件 | 作用 |
 |---|---|
 | `sources.sh` | **源码清单，唯一事实来源**。本身不做事，被三个脚本 `source` 进去 |
+| `progress.sh` | git clone / fetch 的进度条，被 `bootstrap.sh` 和 `update-sources.sh` source |
 | `bootstrap.sh` | 下载源码 + 挂载地图（搭工作区） |
 | `check-updates.sh` | 只读探测：需不需要更新（秒级、带缓存） |
 | `update-sources.sh` | 执行更新（只动已下载的源码） |
@@ -153,6 +155,10 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 ./bootstrap.sh -n              # 演练，只报告不改动
 ./bootstrap.sh --maps-only     # 只重挂地图，不下载（旧名 --notes-only 仍可用）
 ```
+
+终端里下载会画一条进度条，把当前仓库的 git 传输百分比叠到「第几个仓库」上，例如
+`[████░░░░]  30%  objc4  2/10  下载  120.4 MiB | 3.1 MiB/s`。
+非终端（重定向到文件、agent 捕获输出）则走 git 自带的 `Receiving objects: xx%`。
 
 **下载前会先核对本地**，这也是它可以随便重复跑的原因：
 

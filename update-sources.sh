@@ -28,6 +28,8 @@ if [ ! -f "$ROOT/sources.sh" ]; then
 fi
 # shellcheck source=sources.sh
 . "$ROOT/sources.sh"
+# shellcheck source=progress.sh
+. "$ROOT/progress.sh"
 
 DRY_RUN=0
 FORCE=0
@@ -88,7 +90,13 @@ update_git_repo() {
 
   local attempt=1 fetched=0
   while [ ${attempt} -le "$RETRIES" ]; do
-    if run git -C "${dir}" fetch --all --tags --prune --quiet; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      info "[dry-run] git fetch --all --tags --prune --progress"
+      fetched=1
+      break
+    fi
+    if git_run_progress "$name" 0 1 \
+         git -C "${dir}" fetch --all --tags --prune --progress; then
       fetched=1
       break
     fi

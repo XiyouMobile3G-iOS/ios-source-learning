@@ -264,6 +264,7 @@ RunLoop 和自动释放池 Apple 侧有权威源码（`CF-1153.18-apple/` 与 `n
 | 文件 | 作用 |
 |---|---|
 | `sources.sh` | 源码清单（目标名 / 目录 / 上游 / 策略 / ref / clone 参数 / tag 过滤 glob），**三个脚本共用的唯一事实来源** |
+| `progress.sh` | git clone / fetch 进度条，被 bootstrap / update-sources source |
 | `bootstrap.sh` | 下载源码（下载前核对本地）+ 挂载地图 |
 | `check-updates.sh` | 只读探测，秒级、带缓存 |
 | `update-sources.sh` | 执行更新，只动已下载的源码 |

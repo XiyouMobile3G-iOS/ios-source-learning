@@ -1,0 +1,159 @@
+#!/bin/bash
+#
+# tests/progress.test.sh —— progress.sh 的行为测试
+#
+#   ./tests/progress.test.sh
+#
+set -eu
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../progress.sh
+. "$ROOT/progress.sh"
+
+FAILS=0
+assert_eq() {
+  local got="$1" want="$2" name="$3"
+  if [ "$got" = "$want" ]; then
+    printf '  ok  %s\n' "$name"
+  else
+    printf '  FAIL %s\n    got:  %s\n    want: %s\n' "$name" "$got" "$want"
+    FAILS=$((FAILS + 1))
+  fi
+}
+
+assert_ok() {
+  local name="$1"
+  shift
+  if "$@"; then
+    printf '  ok  %s\n' "$name"
+  else
+    printf '  FAIL %s（期望成功）\n' "$name"
+    FAILS=$((FAILS + 1))
+  fi
+}
+
+assert_fail() {
+  local name="$1"
+  shift
+  if "$@"; then
+    printf '  FAIL %s（期望失败）\n' "$name"
+    FAILS=$((FAILS + 1))
+  else
+    printf '  ok  %s\n' "$name"
+  fi
+}
+
+PROGRESS_FILL='#'
+PROGRESS_EMPTY='-'
+
+printf '进度条绘制\n'
+assert_eq "$(progress_bar_string 10 0)"   '----------' '0% 全空'
+assert_eq "$(progress_bar_string 10 100)" '##########' '100% 全满'
+assert_eq "$(progress_bar_string 10 50)"  '#####-----' '50% 一半'
+assert_eq "$(progress_bar_string 10 33)"  '###-------' '33% 向下取整'
+
+printf '阶段加权（条只往前走）\n'
+assert_eq "$(progress_phase_pct 枚举 0)"   '0'  '枚举 0% → 0'
+assert_eq "$(progress_phase_pct 枚举 100)" '5'  '枚举 100% → 5'
+assert_eq "$(progress_phase_pct 压缩 0)"   '5'  '压缩 0% → 5'
+assert_eq "$(progress_phase_pct 压缩 100)" '10' '压缩 100% → 10'
+assert_eq "$(progress_phase_pct 下载 0)"   '10' '下载 0% → 10'
+assert_eq "$(progress_phase_pct 下载 50)"  '50' '下载 50% → 50'
+assert_eq "$(progress_phase_pct 下载 100)" '90' '下载 100% → 90'
+assert_eq "$(progress_phase_pct 解包 0)"   '90' '解包 0% → 90'
+assert_eq "$(progress_phase_pct 解包 100)" '100' '解包 100% → 100'
+
+printf '整体百分比（已完成仓库 + 当前仓库进度）\n'
+assert_eq "$(progress_overall_pct 0 0 5)"   '0'  '尚未开始'
+assert_eq "$(progress_overall_pct 0 50 5)"  '10' '第 1/5 个下到一半 → 10%'
+assert_eq "$(progress_overall_pct 1 50 5)"  '30' '第 2/5 个下到一半 → 30%'
+assert_eq "$(progress_overall_pct 5 0 5)"   '100' '五个都完成'
+assert_eq "$(progress_overall_pct 0 0 0)"   '0'  '总数为 0 不除零'
+
+printf '解析 git clone/fetch 进度行\n'
+assert_ok 'Receiving objects 带速度' \
+  progress_parse_git_line 'Receiving objects:  45% (555/1234), 12.30 MiB | 2.10 MiB/s'
+assert_eq "$PROGRESS_PCT" '45' 'Receiving percent'
+assert_eq "$PROGRESS_PHASE" '下载' 'Receiving phase'
+assert_eq "$PROGRESS_DETAIL" '12.30 MiB | 2.10 MiB/s' 'Receiving size/speed'
+
+assert_ok 'Receiving objects 100% done' \
+  progress_parse_git_line 'Receiving objects: 100% (1234/1234), 50.20 MiB | 3.10 MiB/s, done.'
+assert_eq "$PROGRESS_PCT" '100' 'Receiving done percent'
+
+assert_ok 'Resolving deltas' \
+  progress_parse_git_line 'Resolving deltas:  80% (400/500)'
+assert_eq "$PROGRESS_PCT" '80' 'Resolving percent'
+assert_eq "$PROGRESS_PHASE" '解包' 'Resolving phase'
+
+assert_ok 'remote Counting objects' \
+  progress_parse_git_line 'remote: Counting objects:  12% (148/1234)'
+assert_eq "$PROGRESS_PCT" '12' 'Counting percent'
+assert_eq "$PROGRESS_PHASE" '枚举' 'Counting phase'
+
+assert_ok 'remote Compressing objects' \
+  progress_parse_git_line 'remote: Compressing objects: 100% (567/567), done.'
+assert_eq "$PROGRESS_PHASE" '压缩' 'Compressing phase'
+
+assert_fail '普通日志不是进度行' \
+  progress_parse_git_line 'Cloning into foo...'
+
+assert_fail '空行不是进度行' \
+  progress_parse_git_line ''
+
+printf '消费 \\r 刷新的 git 进度流\n'
+PROGRESS_FORCE=1
+PROGRESS_NEWLINE=1
+log="$(mktemp)"
+consume_before=$FAILS
+out="$(
+  printf 'Receiving objects:  10%% (10/100), 1.00 MiB | 1.00 MiB/s\rReceiving objects: 100%% (100/100), 9.00 MiB | 2.00 MiB/s, done.\nResolving deltas: 100%% (5/5), done.\nCloning into x...\n' \
+    | progress_consume 'objc4' "$log" 0 2 2>&1
+)"
+# 第 1/2 个仓库：下载 10% → 仓库 18% → 整体 9%；下载 100% → 90% → 整体 45%；解包 100% → 100% → 整体 50%
+printf '%s\n' "$out" | grep -q '  9%' || { printf '  FAIL 消费流未画出 9%%\n%s\n' "$out"; FAILS=$((FAILS + 1)); }
+printf '%s\n' "$out" | grep -q ' 45%' || { printf '  FAIL 消费流未画出 45%%\n%s\n' "$out"; FAILS=$((FAILS + 1)); }
+printf '%s\n' "$out" | grep -q ' 50%' || { printf '  FAIL 消费流未画出 50%%\n%s\n' "$out"; FAILS=$((FAILS + 1)); }
+grep -qx 'Cloning into x...' "$log" || { printf '  FAIL 非进度行应写入 log\n'; FAILS=$((FAILS + 1)); }
+if [ "$FAILS" -eq "$consume_before" ]; then
+  printf '  ok  消费 \\r 进度流并透传非进度行\n'
+fi
+rm -f "$log"
+
+printf 'git_run_progress 包装假 git\n'
+PROGRESS_FORCE=1
+PROGRESS_NEWLINE=1
+fake_git_progress() {
+  printf 'Cloning into foo...\n' >&2
+  printf 'Receiving objects:  50%% (50/100), 4.00 MiB | 1.00 MiB/s\r' >&2
+  printf 'Receiving objects: 100%% (100/100), 9.00 MiB | 2.00 MiB/s, done.\n' >&2
+  printf 'Resolving deltas: 100%% (5/5), done.\n' >&2
+  return 0
+}
+wrap_before=$FAILS
+wrap_out="$(git_run_progress 'demo' 0 1 fake_git_progress 2>&1)"
+printf '%s\n' "$wrap_out" | grep -q ' 50%' || { printf '  FAIL 包装未画出下载过半 50%%\n%s\n' "$wrap_out"; FAILS=$((FAILS + 1)); }
+printf '%s\n' "$wrap_out" | grep -q '100%' || { printf '  FAIL 包装未画出解包完成 100%%\n%s\n' "$wrap_out"; FAILS=$((FAILS + 1)); }
+printf '%s\n' "$wrap_out" | grep -q 'Cloning into foo' && { printf '  FAIL 成功时不应回放非进度行\n%s\n' "$wrap_out"; FAILS=$((FAILS + 1)); }
+if [ "$FAILS" -eq "$wrap_before" ]; then
+  printf '  ok  包装假 git 只画进度条\n'
+fi
+
+fake_git_fail() {
+  printf 'fatal: repository not found\n' >&2
+  return 128
+}
+wrap_before=$FAILS
+wrap_out="$(git_run_progress 'demo' 0 1 fake_git_fail 2>&1)" || wrap_st=$?
+[ "${wrap_st:-0}" -eq 128 ] || { printf '  FAIL 失败退出码应为 128，实际 %s\n' "${wrap_st:-0}"; FAILS=$((FAILS + 1)); }
+printf '%s\n' "$wrap_out" | grep -q 'fatal: repository not found' || { printf '  FAIL 失败时应回放 git 错误\n%s\n' "$wrap_out"; FAILS=$((FAILS + 1)); }
+if [ "$FAILS" -eq "$wrap_before" ]; then
+  printf '  ok  失败时回放 git 错误并保留退出码\n'
+fi
+
+if [ "$FAILS" -ne 0 ]; then
+  printf '\n%s 个失败\n' "$FAILS"
+  exit 1
+fi
+printf '\n全部通过\n'
+exit 0

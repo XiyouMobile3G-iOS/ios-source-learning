@@ -28,6 +28,7 @@
 #    仍然是被版本管理的那份文件，不会漂移。
 #
 # 源码清单在同目录的 sources.sh，与 check-updates.sh / update-sources.sh 共用。
+# 下载进度条在 progress.sh，clone / fetch 共用。
 #
 # 搭好之后的日常循环见 README.md：check-updates.sh → update-sources.sh。
 #
@@ -78,6 +79,8 @@ if [ ! -f "$ROOT/sources.sh" ]; then
 fi
 # shellcheck source=sources.sh
 . "$ROOT/sources.sh"
+# shellcheck source=progress.sh
+. "$ROOT/progress.sh"
 
 # ── 参数解析 ────────────────────────────────────────────────────────────
 TARGETS=()
@@ -196,12 +199,22 @@ clone_repo() {
   local path="$ROOT/$dir"
 
   info "下载 $url"
-  if [ -n "$filter" ]; then
-    run git clone $filter --quiet "$url" "$path" || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
-  else
-    run git clone --quiet "$url" "$path" || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "[dry-run] git clone ${filter:+$filter }--progress $url $path"
+    note "  ${key}  [dry-run] 待下载"
+    return 0
   fi
-  [ "$DRY_RUN" -eq 1 ] && { note "  ${key}  [dry-run] 待下载"; return 0; }
+  # 终端画总进度条；非终端走 git --progress 自己的百分比行
+  if [ -n "$filter" ]; then
+    git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" \
+      git clone $filter --progress "$url" "$path" \
+      || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
+  else
+    git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" \
+      git clone --progress "$url" "$path" \
+      || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
+  fi
+  CLONE_DONE=$((CLONE_DONE + 1))
 
   case "$policy" in
     pinned)
@@ -321,11 +334,23 @@ link_maps() {
   fi
 }
 
+# 先数要下几个，进度条才能把「第几个仓库」叠进总百分比
+CLONE_TOTAL=0
+CLONE_DONE=0
+if [ "$MAPS_ONLY" -eq 0 ] && [ "$CHECK_ONLY" -eq 0 ]; then
+  for key in "${TARGETS[@]}"; do
+    source_lookup "$key" || continue
+    source_local_state "$SRC_DIR"
+    [ $? -eq 1 ] && CLONE_TOTAL=$((CLONE_TOTAL + 1))
+  done
+fi
+
 # ── 主流程 ──────────────────────────────────────────────────────────────
 printf '%s源码学习工作区初始化%s  %s\n' "$C_BOLD" "$C_RESET" "$ROOT"
 [ "$DRY_RUN" -eq 1 ]    && warn "dry-run 模式，不会做任何改动"
 [ "$CHECK_ONLY" -eq 1 ] && warn "check 模式，只体检不改动"
 [ "$MAPS_ONLY" -eq 1 ] && warn "只挂地图，不克隆源码"
+[ "$CLONE_TOTAL" -gt 0 ] && info "将下载 ${CLONE_TOTAL} 个仓库（终端下显示进度条）"
 
 for key in "${ALL_TARGETS[@]}"; do
   wants "$key" || continue
