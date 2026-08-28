@@ -12,11 +12,11 @@
 # 目标见 sources.sh；当前为
 #   Apple 底层：objc4 / libdispatch / libdispatch-apple / foundation / swift-foundation / cf
 #   参照实现：  gnustep（gnustep-base，非 Apple 代码）
-#   第三方库：  afnetworking / jsonmodel / sdwebimage（下载到 third-party/）
+#   第三方库：  afnetworking / jsonmodel / yymodel / sdwebimage（下载到 third-party/）
 #
 # 三件事，跑之前先知道：
 #
-# 1. 源码不进本仓库。本仓库只版本管理源码地图与脚本；十份源码由本脚本从各自上游
+# 1. 源码不进本仓库。本仓库只版本管理源码地图与脚本；十一份源码由本脚本从各自上游
 #    下载到固定 ref，并由 .gitignore 忽略——脚本每轮都会用 git check-ignore
 #    核对这一点，漏了会告警。
 #
