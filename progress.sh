@@ -75,7 +75,10 @@ progress_overall_pct() {
     printf '0'
     return 0
   fi
-  printf '%s' $(( (done * 100 + current) / total ))
+  [ "$done" -gt "$total" ] && done="$total"
+  local overall=$(( (done * 100 + current) / total ))
+  [ "$overall" -gt 100 ] && overall=100
+  printf '%s' "$overall"
 }
 
 # progress_parse_git_line <一行>
@@ -162,7 +165,10 @@ progress_handle_line() {
     overall=$(progress_overall_pct "$done" "$repo_pct" "$total")
     idx=$((done + 1))
     text="$label"
-    [ "$total" -gt 0 ] && text="$label  ${idx}/${total}"
+    if [ "$total" -gt 0 ]; then
+      [ "$idx" -gt "$total" ] && idx="$total"
+      text="$label  ${idx}/${total}"
+    fi
     [ -n "$PROGRESS_PHASE" ] && text="${text}  ${PROGRESS_PHASE}"
     [ -n "$PROGRESS_DETAIL" ] && text="${text}  ${PROGRESS_DETAIL}"
     progress_draw "$overall" "$text"

@@ -78,6 +78,8 @@ assert_eq "$(progress_overall_pct 0 0 5)"   '0'  '尚未开始'
 assert_eq "$(progress_overall_pct 0 50 5)"  '10' '第 1/5 个下到一半 → 10%'
 assert_eq "$(progress_overall_pct 1 50 5)"  '30' '第 2/5 个下到一半 → 30%'
 assert_eq "$(progress_overall_pct 5 0 5)"   '100' '五个都完成'
+assert_eq "$(progress_overall_pct 5 100 5)"  '100' '完成数已到总数时仍不超过 100%'
+assert_eq "$(progress_overall_pct 6 100 5)"  '100' '完成数超过总数时限制为 100%'
 assert_eq "$(progress_overall_pct 0 0 0)"   '0'  '总数为 0 不除零'
 
 printf '解析 git clone/fetch 进度行\n'
