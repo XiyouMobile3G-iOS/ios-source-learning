@@ -9,8 +9,8 @@
 
 | 问题涉及 | 去读 |
 |---|---|
-| 类、ivar、method、property 元数据与缓存 | [`YYModel/AGENTS.md`](./YYModel/AGENTS.md) |
-| JSON ↔ model 映射、容器泛型、键路径、自定义转换 | [`YYModel/AGENTS.md`](./YYModel/AGENTS.md) |
+| 类、ivar、method、property 元数据与缓存 | [`YYModel/AGENTS.md#一runtime-元数据`](./YYModel/AGENTS.md#一runtime-元数据) |
+| JSON ↔ model 映射、容器泛型、键路径、自定义转换 | [`YYModel/AGENTS.md#二model-元数据组合`](./YYModel/AGENTS.md#二model-元数据组合) / [`YYModel/AGENTS.md#三导入与导出`](./YYModel/AGENTS.md#三导入与导出) |
 | 边界行为与类型转换回归用例 | [`YYModelTests/AGENTS.md`](./YYModelTests/AGENTS.md) |
 | 公开 API、协议与安装方式 | `YYModel/YYModel.h`、`YYModel/NSObject+YYModel.h` |
 
