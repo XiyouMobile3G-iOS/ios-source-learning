@@ -16,6 +16,7 @@
 | 状态 | 名称 | 提示词文件 | 用途 |
 |---|---|---|---|
 | 默认 | 渐进式互动讲解 | [`methods/progressive-dialogue.md`](./methods/progressive-dialogue.md) | 每轮只推进一个最小子概念，并通过理解检查决定下一步 |
+| 可选 | 问题先行的设计推演 | [`methods/problem-first-design.md`](./methods/problem-first-design.md) | 先提炼待解问题让用户自行设计，逐轮反驳直至方案站得住，最后对照原实现 |
 
 ## 当前可用表达风格
 
