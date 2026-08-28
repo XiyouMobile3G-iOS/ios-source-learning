@@ -192,7 +192,7 @@ RunLoop 和自动释放池 Apple 侧有权威源码（`CF-1153.18-apple/` 与 `n
 - `CFRunLoop.c:838` —— `__CFRunLoopModeIsEmpty` 中主 RunLoop + common mode 直接 `return false`，注释 `// represents the libdispatch main queue`
 - `CFRunLoop.c:2344` —— **同一个条件**决定是否监听 dispatch 端口
 - `CFRunLoop.c:1590` —— 收到消息后回调进 GCD
-- `libdispatch-apple/src/queue.c:8367` —— GCD 侧落点（Swift 版在 `libdispatch/src/queue.c:7071`）
+- `libdispatch-apple/src/queue.c:8367` —— GCD 侧落点（Swift 版在 `libdispatch/src/queue.c:7082`）
 
 一句话：`dispatch_async(main_queue)` 不是 GCD 自己跑的，是主 RunLoop 收到 mach 消息后回调 GCD 执行的。
 
