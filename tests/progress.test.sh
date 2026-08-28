@@ -151,6 +151,19 @@ if [ "$FAILS" -eq "$wrap_before" ]; then
   printf '  ok  失败时回放 git 错误并保留退出码\n'
 fi
 
+printf '临时日志不泄漏\n'
+_tmp=$(mktemp -d)
+TMPDIR="$_tmp"
+export TMPDIR
+PROGRESS_FORCE=1
+PROGRESS_NEWLINE=1
+git_run_progress 'demo' 0 1 fake_git_progress >/dev/null 2>&1 || true
+git_run_progress 'demo' 0 1 fake_git_fail >/dev/null 2>&1 || true
+leftover=$(find "$_tmp" -type f | wc -l | tr -d ' ')
+assert_eq "$leftover" '0' '成功和失败后都没有留下 mktemp 文件'
+rm -rf "$_tmp"
+unset TMPDIR
+
 printf 'clone / fetch 谓词\n'
 # shellcheck source=../sources.sh
 . "$ROOT/sources.sh"

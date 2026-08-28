@@ -186,12 +186,19 @@ git_run_progress() {
   fi
 
   log=$(mktemp) || return 1
-  "$@" 2>&1 | progress_consume "$label" "$log" "$done" "$total"
-  git_rc=${PIPESTATUS[0]}
+  # 只挂 RETURN：progress.sh 被 source，EXIT/INT trap 会盖掉调用方的。
+  # 管道放进 if，避免调用方 set -eo pipefail 时在 rm 之前直接退出。
+  trap 'rm -f -- "$log"' RETURN
+  if "$@" 2>&1 | progress_consume "$label" "$log" "$done" "$total"; then
+    git_rc=${PIPESTATUS[0]}
+  else
+    git_rc=${PIPESTATUS[0]}
+  fi
   progress_end
   if [ "$git_rc" -ne 0 ] && [ -s "$log" ]; then
     cat "$log" >&2
   fi
-  rm -f "$log"
+  rm -f -- "$log"
+  trap - RETURN
   return "$git_rc"
 }
