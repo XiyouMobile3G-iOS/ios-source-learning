@@ -206,16 +206,11 @@ clone_repo() {
     note "  ${key}  [dry-run] 待下载"
     return 0
   fi
-  # 终端画总进度条；非终端走 git --progress 自己的百分比行
-  if [ -n "$filter" ]; then
-    git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" \
-      git clone $filter --progress "$url" "$path" \
-      || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
-  else
-    git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" \
-      git clone --progress "$url" "$path" \
-      || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
-  fi
+  # 终端画总进度条；非终端走 git --progress 自己的百分比行。
+  # 有无 --filter 合成一次调用，与上面 dry-run 那行同一套 ${filter:+...}。
+  git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" \
+    git clone ${filter:+$filter }--progress "$url" "$path" \
+    || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
   CLONE_DONE=$((CLONE_DONE + 1))
 
   case "$policy" in
