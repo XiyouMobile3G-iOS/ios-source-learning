@@ -262,6 +262,8 @@ assert_eq "$(source_redact_url 'https://user:token@github.com/a/b.git')" 'https:
 assert_eq "$(source_redact_url 'https://github.com/a/b.git')" 'https://github.com/a/b.git' '无凭证的 URL 原样返回'
 assert_eq "$(source_redact_url 'https://github.com/a/b.git?access_token=secret&ref=main')" 'https://github.com/a/b.git?access_token=REDACTED&ref=main' '去掉 query 里的 access token'
 assert_eq "$(source_redact_url 'ssh://git@github.com/a/b.git?token=secret')" 'ssh://github.com/a/b.git?token=REDACTED' '去掉 SSH user 和 query token'
+assert_eq "$(source_redact_url 'https://github.com/a/b.git#token=secret')" 'https://github.com/a/b.git#token=REDACTED' '去掉 fragment 里的 token'
+assert_eq "$(source_redact_url 'https://github.com/a/b.git?X-Amz-Signature=abc')" 'https://github.com/a/b.git?X-Amz-Signature=REDACTED' '去掉签名参数'
 rm -rf "$_src"
 
 if [ "$FAILS" -ne 0 ]; then

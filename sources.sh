@@ -114,12 +114,12 @@ source_has_repo() {
   [ $? -eq 0 ]
 }
 
-# source_redact_url <url> —— 日志里去掉 userinfo 和常见 query 凭据，避免 token 进终端
+# source_redact_url <url> —— 日志里去掉 userinfo 和常见 query/fragment 凭据，避免 token 进终端
 source_redact_url() {
   printf '%s' "$1" \
     | sed -E \
-        -e 's#(https?|ssh)://[^/@]+@#\1://#' \
-        -e 's#([?&](access[_-]?token|api[_-]?key|auth|credential|oauth[_-]?token|password|passwd|private[_-]?token|token)=)[^&#]*#\1REDACTED#g'
+        -e 's#(https?|ssh)://[^/@[:space:]]+@#\1://#' \
+        -e 's#([?&#](access[_-]?token|api[_-]?key|auth|credential|github[_-]?token|key|oauth[_-]?token|password|passwd|private[_-]?token|sig|token|X-Amz-Signature)=)[^&#[:space:]]*#\1REDACTED#g'
 }
 
 # source_count <谓词> <目标名...>
