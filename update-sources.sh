@@ -95,8 +95,13 @@ update_git_repo() {
       fetched=1
       break
     fi
-    if git_run_progress "$name" "$FETCH_DONE" "$FETCH_TOTAL" \
-         git -C "${dir}" fetch --all --tags --prune --progress; then
+    local fetch_cmd=(git -C "${dir}" fetch --all --tags --prune)
+    if progress_active; then
+      fetch_cmd+=(--progress)
+    else
+      fetch_cmd+=(--quiet)
+    fi
+    if git_run_progress "$name" "$FETCH_DONE" "$FETCH_TOTAL" "${fetch_cmd[@]}"; then
       fetched=1
       break
     fi

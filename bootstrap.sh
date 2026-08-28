@@ -121,11 +121,10 @@ inspect_local() {
   local key="$1" dir="$2" url="$3" policy="$4" ref="$5"
   local path="$ROOT/$dir"
 
-  if source_needs_clone "$dir"; then
-    return 1
-  fi
-  source_local_state "$dir"
-  case $? in
+  local local_state=0
+  source_local_state "$dir" || local_state=$?
+  case "$local_state" in
+    1) return 1 ;;
     2)
       err "$dir 已存在但不是 git 仓库，未覆盖，请先手动移走"
       note "  ${key}  ${C_RED}目录冲突${C_RESET}"

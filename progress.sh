@@ -99,8 +99,8 @@ progress_parse_git_line() {
   done
   [ -n "$phase" ] || return 1
 
-  local pct=""
-  if [[ "$line" =~ ([0-9]+)% ]]; then
+  local pct="" progress_tail="${line#*"$needle"}"
+  if [[ "$progress_tail" =~ ([0-9]+)% ]]; then
     pct="${BASH_REMATCH[1]}"
   else
     return 1

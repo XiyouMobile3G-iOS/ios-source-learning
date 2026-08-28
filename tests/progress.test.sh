@@ -97,6 +97,10 @@ assert_ok 'Receiving objects 100% done' \
   progress_parse_git_line 'Receiving objects: 100% (1234/1234), 50.20 MiB | 3.10 MiB/s, done.'
 assert_eq "$PROGRESS_PCT" '100' 'Receiving done percent'
 
+assert_ok '阶段前的远程百分比不误匹配' \
+  progress_parse_git_line 'remote: 50% complete; Receiving objects: 20% (2/10)'
+assert_eq "$PROGRESS_PCT" '20' 'Receiving 使用阶段后的百分比'
+
 assert_ok 'Resolving deltas' \
   progress_parse_git_line 'Resolving deltas:  80% (400/500)'
 assert_eq "$PROGRESS_PCT" '80' 'Resolving percent'
@@ -243,6 +247,8 @@ assert_eq "$(source_count source_needs_clone jsonmodel)" '0' '已有仓库时 cl
 assert_eq "$(source_count source_has_repo jsonmodel)" '1' '已有仓库时 fetch 计数 1'
 assert_eq "$(source_redact_url 'https://user:token@github.com/a/b.git')" 'https://github.com/a/b.git' '去掉 URL 里的 user:token'
 assert_eq "$(source_redact_url 'https://github.com/a/b.git')" 'https://github.com/a/b.git' '无凭证的 URL 原样返回'
+assert_eq "$(source_redact_url 'https://github.com/a/b.git?access_token=secret&ref=main')" 'https://github.com/a/b.git?access_token=REDACTED&ref=main' '去掉 query 里的 access token'
+assert_eq "$(source_redact_url 'ssh://git@github.com/a/b.git?token=secret')" 'ssh://github.com/a/b.git?token=REDACTED' '去掉 SSH user 和 query token'
 rm -rf "$_src"
 
 if [ "$FAILS" -ne 0 ]; then
