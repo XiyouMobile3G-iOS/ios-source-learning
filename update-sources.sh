@@ -95,7 +95,7 @@ update_git_repo() {
       fetched=1
       break
     fi
-    if git_run_progress "$name" 0 1 \
+    if git_run_progress "$name" "$FETCH_DONE" "$FETCH_TOTAL" \
          git -C "${dir}" fetch --all --tags --prune --progress; then
       fetched=1
       break
@@ -103,6 +103,7 @@ update_git_repo() {
     [ ${attempt} -lt "$RETRIES" ] && warn "fetch 第 ${attempt} 次失败，${RETRY_WAIT}s 后重试" && sleep "$RETRY_WAIT"
     attempt=$((attempt + 1))
   done
+  FETCH_DONE=$((FETCH_DONE + 1))
   if [ ${fetched} -ne 1 ]; then
     err "${name}: fetch 连续 $RETRIES 次失败（网络？SSH key？）"
     note "  ${name}  ${C_RED}fetch 失败${C_RESET}"
@@ -240,9 +241,18 @@ for t in "${TARGETS[@]}"; do
   source_lookup "$t" || { err "未知目标 ${t}（可用：${ALL_TARGETS[*]}）"; exit 1; }
 done
 
+# 先数本次能 fetch 几个，进度条才能把「第几个仓库」叠进总百分比
+FETCH_TOTAL=0
+FETCH_DONE=0
+for key in "${TARGETS[@]}"; do
+  source_lookup "$key" || continue
+  source_has_repo "$SRC_DIR" && FETCH_TOTAL=$((FETCH_TOTAL + 1))
+done
+
 # ── 主流程 ──────────────────────────────────────────────────────────────
 printf '%s源码学习工作区更新%s  %s\n' "$C_BOLD" "$C_RESET" "$ROOT"
 [ "$DRY_RUN" -eq 1 ] && warn "dry-run 模式，不会做任何改动"
+[ "$FETCH_TOTAL" -gt 0 ] && info "将 fetch ${FETCH_TOTAL} 个仓库（终端下显示进度条）"
 
 # 清单里的策略在这里翻译成更新模式：
 #   pinned → fetch-only  钉住的 tag，只 fetch 报告新版本，永不动工作区

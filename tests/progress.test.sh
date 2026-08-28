@@ -151,6 +151,21 @@ if [ "$FAILS" -eq "$wrap_before" ]; then
   printf '  ok  失败时回放 git 错误并保留退出码\n'
 fi
 
+printf 'clone / fetch 谓词\n'
+# shellcheck source=../sources.sh
+. "$ROOT/sources.sh"
+_src=$(mktemp -d)
+SOURCES_ROOT="$_src"
+assert_ok '目录不存在 → 需要 clone' source_needs_clone missing
+assert_fail '目录不存在 → 不是已有仓库' source_has_repo missing
+mkdir "$_src/occupied"
+assert_fail '被占用 → 不 clone' source_needs_clone occupied
+assert_fail '被占用 → 不是仓库' source_has_repo occupied
+mkdir -p "$_src/repo/.git"
+assert_fail '已是仓库 → 不 clone' source_needs_clone repo
+assert_ok '已是仓库 → 可 fetch' source_has_repo repo
+rm -rf "$_src"
+
 if [ "$FAILS" -ne 0 ]; then
   printf '\n%s 个失败\n' "$FAILS"
   exit 1

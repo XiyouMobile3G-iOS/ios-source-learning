@@ -121,9 +121,11 @@ inspect_local() {
   local key="$1" dir="$2" url="$3" policy="$4" ref="$5"
   local path="$ROOT/$dir"
 
+  if source_needs_clone "$dir"; then
+    return 1
+  fi
   source_local_state "$dir"
   case $? in
-    1) return 1 ;;
     2)
       err "$dir 已存在但不是 git 仓库，未覆盖，请先手动移走"
       note "  ${key}  ${C_RED}目录冲突${C_RESET}"
@@ -340,8 +342,7 @@ CLONE_DONE=0
 if [ "$MAPS_ONLY" -eq 0 ] && [ "$CHECK_ONLY" -eq 0 ]; then
   for key in "${TARGETS[@]}"; do
     source_lookup "$key" || continue
-    source_local_state "$SRC_DIR"
-    [ $? -eq 1 ] && CLONE_TOTAL=$((CLONE_TOTAL + 1))
+    source_needs_clone "$SRC_DIR" && CLONE_TOTAL=$((CLONE_TOTAL + 1))
   done
 fi
 

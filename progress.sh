@@ -18,7 +18,7 @@ progress_bar_string() {
   local width="$1" pct="$2"
   local fill="${PROGRESS_FILL:-█}"
   local empty="${PROGRESS_EMPTY:-░}"
-  local i=0 filled=0 bar=""
+  local filled rest fill_s empty_s
 
   case "$width" in
     ''|*[!0-9]*) width=24 ;;
@@ -29,16 +29,12 @@ progress_bar_string() {
   [ "$width" -gt 0 ] || width=1
   [ "$pct" -gt 100 ] && pct=100
 
+  # printf 填空格再换字符；不用 tr，macOS tr 会把多字节的 █ 拆开
   filled=$((pct * width / 100))
-  while [ "$i" -lt "$width" ]; do
-    if [ "$i" -lt "$filled" ]; then
-      bar="${bar}${fill}"
-    else
-      bar="${bar}${empty}"
-    fi
-    i=$((i + 1))
-  done
-  printf '%s' "$bar"
+  rest=$((width - filled))
+  fill_s=$(printf '%*s' "$filled" '')
+  empty_s=$(printf '%*s' "$rest" '')
+  printf '%s%s' "${fill_s// /$fill}" "${empty_s// /$empty}"
 }
 
 # progress_phase_pct <阶段> <该阶段 0-100>

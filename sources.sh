@@ -101,5 +101,18 @@ source_local_state() {
   return 0
 }
 
+# source_needs_clone <目录名> —— 目录不存在，bootstrap 应当 git clone
+# 已是仓库或被占用都不下（占用交给 inspect_local 报冲突）。
+source_needs_clone() {
+  source_local_state "$1"
+  [ $? -eq 1 ]
+}
+
+# source_has_repo <目录名> —— 本地已是 git 仓库，update-sources 可以 fetch
+source_has_repo() {
+  source_local_state "$1"
+  [ $? -eq 0 ]
+}
+
 # 供上面几个函数定位工作区；三个脚本 source 本文件前已设好各自的 ROOT
 SOURCES_ROOT="${SOURCES_ROOT:-${ROOT:-.}}"
