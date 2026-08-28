@@ -141,10 +141,19 @@ progress_end() {
   fi
 }
 
+# 剥 CSI / OSC，再删剩余 C0/DEL（留 tab）。失败回放 git stderr 时，
+# 不把远程注入的终端控制序列打到用户终端上。
+progress_sanitize_line() {
+  printf '%s' "$1" \
+    | sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033][^\007]*\007//g' \
+    | tr -d '\000-\010\013-\037\177'
+}
+
 progress_handle_line() {
   local line="$1" label="$2" log="$3" done="$4" total="$5"
   line="${line%$'\n'}"
   line="${line%$'\r'}"
+  line=$(progress_sanitize_line "$line")
   [ -n "$line" ] || return 0
 
   if progress_parse_git_line "$line"; then

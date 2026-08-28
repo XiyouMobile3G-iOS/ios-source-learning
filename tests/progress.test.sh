@@ -148,6 +148,13 @@ if [ "$FAILS" -eq "$nl_before" ]; then
 fi
 rm -f "$log"
 
+printf 'stderr 控制序列\n'
+assert_eq "$(progress_sanitize_line $'\033[31mfatal: nope\033[0m')" 'fatal: nope' 'CSI 颜色码'
+assert_eq "$(progress_sanitize_line $'\033]0;pwned\007hello')" 'hello' 'OSC 窗口标题'
+assert_eq "$(progress_sanitize_line $'a\tb')" $'a\tb' 'tab 保留'
+assert_eq "$(progress_sanitize_line 'fatal: repository not found')" 'fatal: repository not found' '普通错误原样'
+assert_eq "$(progress_sanitize_line $'\033[31m下载失败\033[0m')" '下载失败' 'UTF-8 不受影响'
+
 printf 'git_run_progress 包装假 git\n'
 PROGRESS_FORCE=1
 PROGRESS_NEWLINE=1
@@ -177,6 +184,24 @@ wrap_out="$(git_run_progress 'demo' 0 1 fake_git_fail 2>&1)" || wrap_st=$?
 printf '%s\n' "$wrap_out" | grep -q 'fatal: repository not found' || { printf '  FAIL 失败时应回放 git 错误\n%s\n' "$wrap_out"; FAILS=$((FAILS + 1)); }
 if [ "$FAILS" -eq "$wrap_before" ]; then
   printf '  ok  失败时回放 git 错误并保留退出码\n'
+fi
+
+fake_git_ansi() {
+  printf '\033[31mfatal: repository not found\033[0m\n' >&2
+  printf '\033]0;pwned\007hint: also a hint\n' >&2
+  return 128
+}
+wrap_before=$FAILS
+wrap_st=0
+wrap_out="$(git_run_progress 'demo' 0 1 fake_git_ansi 2>&1)" || wrap_st=$?
+[ "$wrap_st" -eq 128 ] || { printf '  FAIL ANSI 失败退出码应为 128，实际 %s\n' "$wrap_st"; FAILS=$((FAILS + 1)); }
+case "$wrap_out" in
+  *$'\033'*) printf '  FAIL 回放不应含 ESC\n%s\n' "$wrap_out"; FAILS=$((FAILS + 1)) ;;
+esac
+printf '%s\n' "$wrap_out" | grep -q 'fatal: repository not found' || { printf '  FAIL 剥离后仍应有 fatal 文本\n%s\n' "$wrap_out"; FAILS=$((FAILS + 1)); }
+printf '%s\n' "$wrap_out" | grep -q 'hint: also a hint' || { printf '  FAIL 非 fatal 前缀的行也要回放\n%s\n' "$wrap_out"; FAILS=$((FAILS + 1)); }
+if [ "$FAILS" -eq "$wrap_before" ]; then
+  printf '  ok  失败回放剥控制序列且保留 hint\n'
 fi
 
 printf '临时日志不泄漏\n'
