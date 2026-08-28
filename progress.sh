@@ -26,6 +26,7 @@ progress_bar_string() {
   case "$pct" in
     ''|*[!0-9]*) pct=0 ;;
   esac
+  [ "$pct" -lt 0 ] && pct=0
   [ "$width" -gt 0 ] || width=1
   [ "$pct" -gt 100 ] && pct=100
 
@@ -40,10 +41,10 @@ progress_bar_string() {
 # 阶段|git 进度行子串|仓库进度起点|宽度。parse 与加权共用，条只往前走：
 # 枚举 0–5，压缩 5–10，下载 10–90，解包 90–100。
 PROGRESS_PHASE_TABLE=(
-  "下载|Receiving objects:|10|80"
-  "解包|Resolving deltas:|90|10"
   "枚举|Counting objects:|0|5"
   "压缩|Compressing objects:|5|5"
+  "下载|Receiving objects:|10|80"
+  "解包|Resolving deltas:|90|10"
 )
 
 # progress_phase_pct <阶段> <该阶段 0-100>
@@ -52,6 +53,7 @@ progress_phase_pct() {
   case "$pct" in
     ''|*[!0-9]*) pct=0 ;;
   esac
+  [ "$pct" -lt 0 ] && pct=0
   [ "$pct" -gt 100 ] && pct=100
   for spec in "${PROGRESS_PHASE_TABLE[@]}"; do
     IFS='|' read -r p needle start width <<< "$spec"
@@ -152,11 +154,19 @@ progress_sanitize_line() {
     | tr -d '\000-\010\013-\037\177'
 }
 
+progress_redact_line() {
+  printf '%s' "$1" \
+    | sed -E \
+        -e 's#(https?|ssh)://[^/@[:space:]]+@#\1://#g' \
+        -e 's#([?&](access[_-]?token|api[_-]?key|auth|credential|github[_-]?token|key|oauth[_-]?token|password|passwd|private[_-]?token|sig|token|X-Amz-Signature)=)[^&#[:space:]]*#\1REDACTED#g'
+}
+
 progress_handle_line() {
   local line="$1" label="$2" log="$3" done="$4" total="$5"
   line="${line%$'\n'}"
   line="${line%$'\r'}"
   line=$(progress_sanitize_line "$line")
+  line=$(progress_redact_line "$line")
   [ -n "$line" ] || return 0
 
   if progress_parse_git_line "$line"; then

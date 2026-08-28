@@ -61,6 +61,7 @@ assert_eq "$(progress_bar_string 10 0)"   '----------' '0% 全空'
 assert_eq "$(progress_bar_string 10 100)" '##########' '100% 全满'
 assert_eq "$(progress_bar_string 10 50)"  '#####-----' '50% 一半'
 assert_eq "$(progress_bar_string 10 33)"  '###-------' '33% 向下取整'
+assert_eq "$(progress_bar_string 10 -1)"   '----------' '负百分比限制为 0'
 
 printf '阶段加权（条只往前走）\n'
 assert_eq "$(progress_phase_pct 枚举 0)"   '0'  '枚举 0% → 0'
@@ -160,6 +161,8 @@ assert_eq "$(progress_sanitize_line $'\033]0;pwned\007hello')" 'hello' 'OSC 窗�
 assert_eq "$(progress_sanitize_line $'a\tb')" $'a\tb' 'tab 保留'
 assert_eq "$(progress_sanitize_line 'fatal: repository not found')" 'fatal: repository not found' '普通错误原样'
 assert_eq "$(progress_sanitize_line $'\033[31m下载失败\033[0m')" '下载失败' 'UTF-8 不受影响'
+assert_eq "$(progress_redact_line 'fatal: https://user:secret@github.com/a/b.git?token=abc&ref=main')" 'fatal: https://github.com/a/b.git?token=REDACTED&ref=main' '失败日志脱敏 URL 凭据'
+assert_eq "$(progress_redact_line 'fatal: https://github.com/a/b.git?X-Amz-Signature=abc')" 'fatal: https://github.com/a/b.git?X-Amz-Signature=REDACTED' '失败日志脱敏签名参数'
 
 printf 'git_run_progress 包装假 git\n'
 PROGRESS_FORCE=1
