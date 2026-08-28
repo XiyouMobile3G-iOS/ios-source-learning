@@ -1,6 +1,7 @@
 # libdispatch（GCD）Swift 开源版 —— 用途与差异
 
 `apple/swift-corelibs-libdispatch`，分支 `main`，blobless clone。
+**本文行号按 commit `c48e92d9` 写；这份追 main，升版后行号会漂，引用务必带 commit。**
 
 ## 先看这条
 
@@ -13,7 +14,7 @@
 
 | | 本目录 | `../libdispatch-apple/` |
 |---|---|---|
-| `src/queue.c` | 7609 行 | 9085 行 |
+| `src/queue.c` | 7622 行 | 9085 行 |
 | `src/workgroup.c` | **无** | 2030 行 |
 | `src/eventlink.c` | **无** | 561 行 |
 | `exclavekit/`、`client_callout.mm` | **无** | 有 |
@@ -34,8 +35,8 @@
 
 | 符号 | 位置 |
 |---|---|
-| `dispatch_async` | `src/queue.c:914` |
-| `dispatch_sync` | `src/queue.c:1941` |
-| `_dispatch_main_queue_callback_4CF` | `src/queue.c:7071` |
+| `dispatch_async` | `src/queue.c:921` |
+| `dispatch_sync` | `src/queue.c:1948` |
+| `_dispatch_main_queue_callback_4CF` | `src/queue.c:7082` |
 | `dispatch_once_f` | `src/once.c:52` |
 | `dispatch_group_*` | `src/semaphore.c`（同 Apple 版，行号一致） |

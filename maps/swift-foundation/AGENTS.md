@@ -3,7 +3,7 @@
 Apple 的 **Foundation 核心实现**，Swift 重写版。`swift-corelibs-foundation` 现在只是外壳，
 真正的实现体在这里；两个仓库**必须成对读**。
 
-版本：分支 `main`（记录时 commit `1335fd1`，2026-08-25）。
+版本：分支 `main`（记录时 commit `56a12567`，2026-08-28）。
 **这份追 main，行号会随更新漂移**——引用时务必带 commit，发现对不上就重新 `grep -n`。
 规模：`Sources/` 共 138428 行 Swift。**不要整读任何一个大文件**。
 

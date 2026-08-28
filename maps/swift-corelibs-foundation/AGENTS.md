@@ -1,6 +1,8 @@
 # swift-corelibs-foundation —— 用途与地图
 
-`apple/swift-corelibs-foundation`，分支 `main`，blobless clone。snapshot `swift-DEVELOPMENT-SNAPSHOT-2026-07-11-a`。
+`apple/swift-corelibs-foundation`，分支 `main`，blobless clone。
+**记录时 commit `761b621d`，snapshot `swift-DEVELOPMENT-SNAPSHOT-2026-08-21-a`；
+这份追 main，引用务必带 commit。**
 
 ## 先看这条
 
