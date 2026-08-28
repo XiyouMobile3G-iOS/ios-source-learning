@@ -43,6 +43,7 @@ SOURCES=(
   "gnustep|gnustep-base|gnustep-base|https://github.com/gnustep/libs-base.git|pinned|base-1_31_1|--filter=blob:none|base-*"
   "afnetworking|third-party/AFNetworking|AFNetworking|https://github.com/AFNetworking/AFNetworking.git|pinned|4.0.1|"
   "jsonmodel|third-party/JSONModel|JSONModel|https://github.com/jsonmodel/jsonmodel.git|pinned|1.8.0|"
+  "yymodel|third-party/YYModel|YYModel|https://github.com/ibireme/YYModel.git|pinned|1.0.4|"
   "sdwebimage|third-party/SDWebImage|SDWebImage|https://github.com/SDWebImage/SDWebImage.git|pinned|5.21.7|"
 )
 

@@ -4,7 +4,7 @@
 
 - **Apple 底层**：objc runtime、CoreFoundation（RunLoop）、libdispatch（GCD）、Foundation（外壳 + 实现体两份）
 - **参照实现**：GNUstep base——Apple 从未开源 Foundation 的 ObjC 实现，`NSNotificationCenter`、KVO 只能看它
-- **常用第三方库**（都在 `third-party/` 一个文件夹里）：AFNetworking、JSONModel、SDWebImage
+- **常用第三方库**（都在 `third-party/` 一个文件夹里）：AFNetworking、JSONModel、YYModel、SDWebImage
 
 本仓库**不搬运任何源码**，只提供三样东西——而这三样恰恰是"下载了源码却读不动"的真正卡点：
 
@@ -15,9 +15,9 @@
 
 | 提供什么 | 解决什么问题 |
 |---|---|
-| **一套手写的源码地图**（`maps/`，56 份、按模块划分、含符号与行号） | `CFRunLoop.c` 3955 行、`queue.c` 9085 行，整读会挤爆 agent 上下文；地图让它直接跳到那几十行 |
+| **一套手写的源码地图**（`maps/`，62 份、按模块划分、含符号与行号） | `CFRunLoop.c` 3955 行、`queue.c` 9085 行，整读会挤爆 agent 上下文；地图让它直接跳到那几十行 |
 | **一套 agent 行为规范**（`AGENTS.md` / `CLAUDE.md`） | 强制"先核对源码版本再回答"，杜绝 LLM 凭记忆编 runtime 细节，或拿 AFNetworking 2.x 的博客结论讲 4.x |
-| **一套版本管理脚本**（`sources.sh` 清单 + `bootstrap.sh` / `check-updates.sh` / `update-sources.sh`） | 十份源码分别钉在正确的 drop / tag / 分支上，下载前先核对本地、能安全跟进上游更新 |
+| **一套版本管理脚本**（`sources.sh` 清单 + `bootstrap.sh` / `check-updates.sh` / `update-sources.sh`） | 十一份源码分别钉在正确的 drop / tag / 分支上，下载前先核对本地、能安全跟进上游更新 |
 
 配合 Claude Code、Codex 等能读 `AGENTS.md` 的 agent 使用：**clone → bootstrap → 直接提问**，它会自己找到该读哪个文件的哪一段。
 
@@ -31,7 +31,7 @@ cd ios-source-learning
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` 会把十份上游源码下载到各自正确的 ref，并把 `maps/` 里的地图以符号链接挂回源码树原位。
+`bootstrap.sh` 会把十一份上游源码下载到各自正确的 ref，并把 `maps/` 里的地图以符号链接挂回源码树原位。
 **首次约 2–3 GB，视网络需要十几分钟**；可重复运行，**已经下载过的不会重复拉**。
 
 完整用法见下面的[脚本使用说明](#脚本使用说明)。
@@ -64,7 +64,7 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 ├── bootstrap.sh         # 搭建：下载源码（先核对本地）+ 挂载地图
 ├── check-updates.sh     # 只读探测：需不需要更新（秒级、带缓存）
 ├── update-sources.sh    # 执行更新（三种策略，见下）
-├── maps/                # ★ 本仓库唯一的正文：56 份源码地图（正文一律在 AGENTS.md）
+├── maps/                # ★ 本仓库唯一的正文：62 份源码地图（正文一律在 AGENTS.md）
 │   ├── new objc4/                    # 根 + runtime / Messengers / Threading / test / ObjectiveC / objcdt 六份模块地图
 │   ├── CF-1153.18-apple/             # RunLoop 权威实现的符号行号表
 │   ├── libdispatch-apple/
@@ -75,6 +75,7 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 │   └── third-party/                  # 第三方库地图，每份都是「库根索引 + 模块文档」两级
 │       ├── AFNetworking/             # 索引 + 核心 / UIKit / 测试
 │       ├── JSONModel/                # 索引 + 核心 / 转换 / 网络（废弃）
+│       ├── YYModel/                  # 索引 + 核心 / 测试
 │       └── SDWebImage/               # 索引 + Core / Private / MapKit / 测试
 ├── prompts/teaching/    # 教学提示词（渐进式互动讲解 + 面试回答风格）
 ├── docs/plans/          # 上述提示词的设计与实施记录
@@ -82,7 +83,7 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 └── （以下由 bootstrap.sh 克隆，.gitignore 不跟踪）
     new objc4/  CF-1153.18-apple/  libdispatch-apple/  libdispatch/  swift-corelibs-foundation/
     swift-foundation/  gnustep-base/
-    third-party/AFNetworking/  third-party/JSONModel/  third-party/SDWebImage/
+    third-party/AFNetworking/  third-party/JSONModel/  third-party/YYModel/  third-party/SDWebImage/
 ```
 
 ### 六份 Apple 源码的定位
@@ -111,18 +112,19 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 所以它的定位是**参照实现**：行为按 OpenStep 规范对齐，实现细节不保证与 Apple 一致，
 引用时必须注明「GNUstep base 1.31.1」。RunLoop、自动释放池这类 Apple 侧有权威源码的，一律不用这份。
 
-### 三份第三方库的定位
+### 四份第三方库的定位
 
-三份都集中在 `third-party/` 一个文件夹里，与 Apple 源码的顶层目录分开，各自是独立 git 仓库。
+四份都集中在 `third-party/` 一个文件夹里，与 Apple 源码的顶层目录分开，各自是独立 git 仓库。
 
 | 目录 | 内容 | 钉在哪 |
 |---|---|---|
 | `third-party/AFNetworking/` | 网络库。**4.x 只剩 `NSURLSession` 一条路径，没有常驻 RunLoop 线程**（那是 2.x） | tag `4.0.1` |
 | `third-party/JSONModel/` | JSON↔Model 映射。全库仅 3350 行，是 objc runtime 属性内省的教科书样本 | tag `1.8.0` |
+| `third-party/YYModel/` | JSON↔Model 映射。类/属性元数据缓存与容器泛型实现 | tag `1.0.4` |
 | `third-party/SDWebImage/` | 图片加载与缓存。5.x 缓存/加载/编解码全部协议化 | tag `5.21.7` |
 
 **它们钉在具体 release tag 上**，理由和 objc4 一样：地图里的行号按该 tag 写，自动升版会让行号全部失效。
-所以 `update-sources.sh` 对这三份只 fetch、只报告，不改工作区；升版是人工任务（改 `sources.sh` 里的 ref + 校对地图行号）。
+所以 `update-sources.sh` 对这四份只 fetch、只报告，不改工作区；升版是人工任务（改 `sources.sh` 里的 ref + 校对地图行号）。
 
 **选型铁律**：研究 iOS/macOS 真实行为时，CoreFoundation 看 `CF-1153.18-apple/`、GCD 看 `libdispatch-apple/`。
 Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真实二进制；反过来查"10.13 之后 CF 怎么演进"只能看 swift-corelibs——Apple 已停止开源 CF。
@@ -231,17 +233,17 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 | 10 | `UPDATE` | 跑 `./update-sources.sh` 再读 |
 | 2 | `ERROR` | 按"未能更新"处理，声明基于本地版本后作答 |
 
-外加一类 `NOTICE`：有新版本但脚本按策略不会自动切（objc4、gnustep 与三份第三方库），需人工处理，**不改变退出码**——免得 agent 每轮都被驱使去跑一次注定无效的更新。
+外加一类 `NOTICE`：有新版本但脚本按策略不会自动切（objc4、gnustep 与四份第三方库），需人工处理，**不改变退出码**——免得 agent 每轮都被驱使去跑一次注定无效的更新。
 
 `update-sources.sh` 对三类仓库用三种策略：
 
 | 目标 | 策略 | 原因 |
 |---|---|---|
-| `objc4` / `gnustep` / `afnetworking` / `jsonmodel` / `sdwebimage` | 只 fetch、报告新版本，**永不动工作区** | 钉在指定 tag，自动升级会让地图里全部行号失效 |
+| `objc4` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage` | 只 fetch、报告新版本，**永不动工作区** | 钉在指定 tag，自动升级会让地图里全部行号失效 |
 | `libdispatch` / `foundation` / `swift-foundation` / `cf` | `merge --ff-only` | 干净的 tracking 分支 |
 | `libdispatch-apple` | 自动 checkout 到版本号最高的 tag | drop 代码在 tag 上，`main` 常落后 |
 
-安全约束：工作区脏默认跳过（`-f` 才 stash）、本地领先上游判为分叉只报告、只用 `--ff-only`、fetch 失败自动重试 3 次。两个脚本都接受目标名收窄范围（`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `swift-foundation` / `cf` / `gnustep` / `afnetworking` / `jsonmodel` / `sdwebimage`），`-h` 看完整用法。
+安全约束：工作区脏默认跳过（`-f` 才 stash）、本地领先上游判为分叉只报告、只用 `--ff-only`、fetch 失败自动重试 3 次。两个脚本都接受目标名收窄范围（`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `swift-foundation` / `cf` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage`），`-h` 看完整用法。
 
 > 升级源码后行号会变，**地图里的行号需要同步校对**——这是 objc4 采取"只报告不自动切"策略的原因。
 
@@ -278,7 +280,7 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 
 - 每份控制在 200 行内，只放**文件表 + 关键符号 + 行号**，不复制源码正文——它的用途是让 agent 少读文件，自己先撑爆上下文就本末倒置了。
 - 引用一律 `文件:行号` + 版本号。三个追 `main` 的仓库（`libdispatch` / `swift-corelibs-foundation` / `swift-foundation`）随时在动，**必须同时记 commit**。
-- **`maps/` 下正文一律写在 `AGENTS.md`，`CLAUDE.md` 一律是那三行指针**，28 个目录无一例外，不要反着放。
+- **`maps/` 下正文一律写在 `AGENTS.md`，`CLAUDE.md` 一律是那三行指针**，31 个目录无一例外，不要反着放。
   理由：`AGENTS.md` 是跨 agent 的通用约定（Codex 等也读），`CLAUDE.md` 是 Claude 专属；
   正文放通用的那份，其他 agent 才不用多跳一次。两份成对存在但**内容不重复**，避免 agent 把两份都读进上下文。
 - **但仓库根目录相反**：根 `CLAUDE.md` 是指向 `AGENTS.md` 的**符号链接**，不是指针文件。
@@ -308,7 +310,7 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 
 本仓库内容为原创的源码地图与工具脚本；**源码本体一概不在此处**，由 `bootstrap.sh` 从各自上游仓库拉取，其许可以上游为准
 （objc4 / CF / libdispatch 的 Apple drop 遵循 APSL，swift-corelibs-* 与 swift-foundation 遵循 Apache-2.0，
-**gnustep-base 遵循 LGPL-2.1+**，AFNetworking / JSONModel / SDWebImage 遵循 MIT）。
+**gnustep-base 遵循 LGPL-2.1+**，AFNetworking / JSONModel / YYModel / SDWebImage 遵循 MIT）。
 
 上游地址：
 
@@ -322,6 +324,7 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 - https://github.com/AFNetworking/AFNetworking
 - https://github.com/jsonmodel/jsonmodel
 - https://github.com/SDWebImage/SDWebImage
+- https://github.com/ibireme/YYModel
 
 ---
 
