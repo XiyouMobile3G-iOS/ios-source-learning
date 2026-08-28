@@ -1,5 +1,14 @@
 # AGENTS.md —— iOS 源码学习工作区
 
+> **本文件有两个入口名，内容只有这一份。**
+> `AGENTS.md` 是正文本体（Codex 等 agent 自动加载）；`CLAUDE.md` 是指向它的**符号链接**
+> （Claude Code 自动加载）。两者在磁盘上是同一个文件，**读到任意一个就已经读全，不必再读另一个**。
+>
+> 之所以不用「一份正文 + 一份指针」——那是 `maps/` 下 28 个目录的做法，在这里行不通：
+> **指针只在「按需读取」时成立。根目录这两个文件是被自动注入上下文的，指针会被自动注入
+> 这个机制本身架空**——agent 开局就拿到了一句「去读另一个文件」，然后直奔任务，再不回头。
+> 这是实测结论，见规范二末尾。
+
 本目录是三类源码的研究区：
 
 - **Apple 底层**：objc runtime / CoreFoundation（RunLoop）/ libdispatch（GCD）/ Foundation（两份：外壳 + 实现体）
@@ -28,6 +37,15 @@
 ./bootstrap.sh afnetworking jsonmodel sdwebimage    # 只补三份第三方库（约 70 MB）
 ./bootstrap.sh swift-foundation gnustep             # 只补通知中心相关的两份（约 40 MB）
 ```
+
+会被下载到工作区的十个目录：
+
+- **Apple 底层六份**：`new objc4/` `CF-1153.18-apple/` `libdispatch-apple/` `libdispatch/`
+  `swift-corelibs-foundation/` `swift-foundation/`
+- **参照实现一份**：`gnustep-base/`（**非 Apple 代码**，补 Apple 从未开源的 Foundation ObjC
+  实现，主要是 `NSNotificationCenter` 与 KVO；约 12 MB，可单独补：`./bootstrap.sh gnustep`）
+- **第三方库三份**，都在 `third-party/` 下：`AFNetworking/` `JSONModel/` `SDWebImage/`
+  （合计约 70 MB，可单独补：`./bootstrap.sh afnetworking jsonmodel sdwebimage`）
 
 首次全量约 2–3 GB、耗时较长，**必须先告知用户再执行**，不要在回答问题的中途默默拉一遍。
 `bootstrap.sh` 下载前会核对本地：已有的不会重复下载；版本与地图基准不一致时**只提示不自动切**，
@@ -69,11 +87,25 @@ Foundation 被拆成 corelibs 外壳 + swift-foundation 实现体——凭印象
 
 ## 规范二：教学提示词渐进式路由
 
-当用户请求「讲解」「学习」「原理」「为什么」或源码分析时：
+当用户请求「讲解」「学习」「原理」「为什么」或源码分析时，**按下面的顺序**执行：
 
-1. 必须先读取并遵循 [`prompts/teaching/INDEX.md`](./prompts/teaching/INDEX.md)。
-2. 用户未指定其他已注册方法或风格时，使用索引声明的默认教学方法。
-3. 只读取索引为本次讲解选中的提示词文件，不要扫描或一次性读入整个提示词目录。
+1. 照规范一核对源码版本。
+2. 照下面「按任务定位」表选中目标仓库，读该仓库的 `AGENTS.md` 地图拿到文件名与行号（规范三）。
+3. 读取并遵循 [`prompts/teaching/INDEX.md`](./prompts/teaching/INDEX.md)。
+4. 用户未指定其他已注册方法或风格时，使用索引声明的默认教学方法。
+5. 只读取索引为本次讲解选中的提示词文件，不要扫描或一次性读入整个提示词目录。
+
+**前两步不能跳，也不能挪到后面。** 教学提示词决定「怎么讲」，规范一与规范三决定「讲的内容
+从哪来、准不准」。顺序反了就会拿着正确的讲法去裸读源码，既烧上下文又容易漏掉地图里
+已经标好的坑。
+
+> **两次实测教训**（就是本文件开头那条「指针会被自动注入架空」的由来）：
+> - 第一次：`CLAUDE.md` 把本规范写成「必须」、把 `AGENTS.md` 写成「按需」，冷启动 agent
+>   直接跳过整个 `maps/` 层裸读源码，答案侥幸对了，但跳过了版本核对，还多花一次读取去撞
+>   「corelibs 里没有 NotificationCenter」这个地图早已标注的坑。
+> - 第二次：把 `CLAUDE.md` 的措辞加硬到「第 1 步不能跳」后重测，agent **仍然**先读教学索引、
+>   仍然没读 `AGENTS.md`，开销反而从 16 次工具调用涨到 24 次。
+>   加硬措辞解决不了，才改成现在的符号链接方案。
 
 ## 规范三：渐进式披露，防止上下文溢出
 

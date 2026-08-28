@@ -52,6 +52,7 @@
 | `-addObserver:selector:name:object:` | `813` |
 | ↑ 加锁 `lockNCTable` | `839` |
 | ↑ `obsNew` 从 chunk 池分配 `Observation`（`264`） | `841` |
+| ↑ ↑ **`objc_initWeak(&obs->observer, o)`** —— observer 存的是**弱引用** | `308` |
 | ↑ **具名分支**：`GSIMapNodeForKey(NAMED, name)` | `855` |
 | ↑ ↑ name 首次出现，建二级表并挂上 | `864` |
 | ↑ **无名分支**：`GSIMapNodeForSimpleKey(NAMELESS, object)` | `890` |
@@ -82,12 +83,31 @@ block 版不是另一套机制：它包一个 `GSNotificationObserver`（`633` �
 | 每次调用包 `NS_DURING` / `NS_HANDLER`——**单个 observer 抛异常不中断其余投递** | `1286` / `1291` |
 | 收尾清空数组（重新加锁） | `1316-1318` |
 
-`addPost`（`1120`）负责把一条链表整体追加进待投递数组，同时对每个 `Observation` 做
-`obsPost`（`494`）增加 posting 计数——**这就是「投递过程中 removeObserver 不会崩」的机制**：
+`addPost`（`1120`）负责把一条链表整体追加进待投递数组，顺带做**惰性垃圾回收**：
+`1138` 用 `objc_loadWeakRetained` 把弱引用提升为临时强引用写进 `o->receiver`——
+提得上来就进投递数组（`1142`），提不上来说明 observer 已经 dealloc，
+走 `1145` 的 `else` 分支就地摘链并 `obsFree`（`1159`）。
+**过期观察记录不是在 dealloc 时清的，是在下一次 post 路过时顺手清的**——
+这就是「忘了 removeObserver 也不会野指针」在这份实现里的机制。
+
+同时它对每个 `Observation` 做 `obsPost`（`494`）增加 posting 计数——**这就是「投递过程中 removeObserver 不会崩」的机制**：
 链表节点在投递期间不会真正释放，只标记，等 posting 归零由 `obsDone`（`474`）回收。
 
 `postNotification:` `1332` / `postNotificationName:object:` `1346` / `...userInfo:` `1359`
 都只是薄封装，全部落到 `_postAndRelease:`。
+
+> **坑：`1352-1358` 的文档注释是过时的，且结论与代码相反。**
+> 它给 `postNotificationName:object:userInfo:`（`1359`）写的说明是：
+> *「For performance reasons, we don't wrap an exception handler round every message sent
+> to an observer. This means that, if one observer raises an exception, later observers in
+> the lists will not get the notification.」*（原文在 `1355-1357`）
+>
+> 但 `1286` 的 `NS_DURING` / `1291` 的 `NS_HANDLER` 明明把**每一次** `performSelector` 都包住了，
+> 捕获后只打日志并继续循环。**以代码为准：这一版里单个 observer 抛异常不影响其余 observer。**
+> 只查注释会得到完全相反的答案。
+>
+> 注意这条只对 GNUstep 成立。Apple 平台不吞异常，后续 observer 收不到——那正是这段旧注释
+> 描述的语义，但**本工作区没有任何源码能证明 Apple 侧的行为**，引用时必须标注为行为性结论。
 
 ### 注销
 
