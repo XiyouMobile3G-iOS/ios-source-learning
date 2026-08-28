@@ -340,10 +340,7 @@ link_maps() {
 CLONE_TOTAL=0
 CLONE_DONE=0
 if [ "$MAPS_ONLY" -eq 0 ] && [ "$CHECK_ONLY" -eq 0 ]; then
-  for key in "${TARGETS[@]}"; do
-    source_lookup "$key" || continue
-    source_needs_clone "$SRC_DIR" && CLONE_TOTAL=$((CLONE_TOTAL + 1))
-  done
+  CLONE_TOTAL=$(source_count source_needs_clone "${TARGETS[@]}")
 fi
 
 # ── 主流程 ──────────────────────────────────────────────────────────────

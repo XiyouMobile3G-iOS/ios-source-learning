@@ -114,5 +114,17 @@ source_has_repo() {
   [ $? -eq 0 ]
 }
 
+# source_count <谓词> <目标名...>
+# 对每个目标 lookup 后对 SRC_DIR 调谓词（source_needs_clone / source_has_repo）。
+source_count() {
+  local pred="$1" n=0 key
+  shift
+  for key in "$@"; do
+    source_lookup "$key" || continue
+    "$pred" "$SRC_DIR" && n=$((n + 1))
+  done
+  printf '%s' "$n"
+}
+
 # 供上面几个函数定位工作区；三个脚本 source 本文件前已设好各自的 ROOT
 SOURCES_ROOT="${SOURCES_ROOT:-${ROOT:-.}}"

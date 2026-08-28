@@ -37,21 +37,30 @@ progress_bar_string() {
   printf '%s%s' "${fill_s// /$fill}" "${empty_s// /$empty}"
 }
 
+# 阶段|git 进度行子串|仓库进度起点|宽度。parse 与加权共用，条只往前走：
+# 枚举 0–5，压缩 5–10，下载 10–90，解包 90–100。
+PROGRESS_PHASE_TABLE=(
+  "下载|Receiving objects:|10|80"
+  "解包|Resolving deltas:|90|10"
+  "枚举|Counting objects:|0|5"
+  "压缩|Compressing objects:|5|5"
+)
+
 # progress_phase_pct <阶段> <该阶段 0-100>
-# 同一仓库内条只往前走：枚举 0–5，压缩 5–10，下载 10–90，解包 90–100。
 progress_phase_pct() {
-  local phase="$1" pct="$2"
+  local phase="$1" pct="$2" spec p needle start width
   case "$pct" in
     ''|*[!0-9]*) pct=0 ;;
   esac
   [ "$pct" -gt 100 ] && pct=100
-  case "$phase" in
-    枚举) printf '%s' $(( pct * 5 / 100 )) ;;
-    压缩) printf '%s' $(( 5 + pct * 5 / 100 )) ;;
-    下载) printf '%s' $(( 10 + pct * 80 / 100 )) ;;
-    解包) printf '%s' $(( 90 + pct * 10 / 100 )) ;;
-    *)    printf '%s' "$pct" ;;
-  esac
+  for spec in "${PROGRESS_PHASE_TABLE[@]}"; do
+    IFS='|' read -r p needle start width <<< "$spec"
+    if [ "$p" = "$phase" ]; then
+      printf '%s' $(( start + pct * width / 100 ))
+      return 0
+    fi
+  done
+  printf '%s' "$pct"
 }
 
 # progress_overall_pct <已完成仓库数> <当前仓库 0-100> <总仓库数>
@@ -78,14 +87,14 @@ progress_parse_git_line() {
   PROGRESS_DETAIL=""
   [ -n "$line" ] || return 1
 
-  local phase=""
-  case "$line" in
-    *'Receiving objects:'*)     phase='下载' ;;
-    *'Resolving deltas:'*)      phase='解包' ;;
-    *'Counting objects:'*)      phase='枚举' ;;
-    *'Compressing objects:'*)   phase='压缩' ;;
-    *) return 1 ;;
-  esac
+  local phase="" spec p needle start width
+  for spec in "${PROGRESS_PHASE_TABLE[@]}"; do
+    IFS='|' read -r p needle start width <<< "$spec"
+    case "$line" in
+      *"$needle"*) phase="$p"; break ;;
+    esac
+  done
+  [ -n "$phase" ] || return 1
 
   local pct=""
   if [[ "$line" =~ ([0-9]+)% ]]; then
@@ -192,13 +201,13 @@ git_run_progress() {
 
   log=$(mktemp) || return 1
   # 只挂 RETURN：progress.sh 被 source，EXIT/INT trap 会盖掉调用方的。
-  # 管道放进 if，避免调用方 set -eo pipefail 时在 rm 之前直接退出。
+  # 管道放进子 shell + set +e，挡住调用方的 set -eo pipefail，并拿到 PIPESTATUS[0]。
   trap 'rm -f -- "$log"' RETURN
-  if "$@" 2>&1 | progress_consume "$label" "$log" "$done" "$total"; then
-    git_rc=${PIPESTATUS[0]}
-  else
-    git_rc=${PIPESTATUS[0]}
-  fi
+  git_rc=$(
+    set +e
+    "$@" 2>&1 | progress_consume "$label" "$log" "$done" "$total"
+    printf '%s' "${PIPESTATUS[0]}"
+  )
   progress_end
   if [ "$git_rc" -ne 0 ] && [ -s "$log" ]; then
     cat "$log" >&2

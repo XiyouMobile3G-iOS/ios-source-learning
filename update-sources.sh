@@ -242,12 +242,8 @@ for t in "${TARGETS[@]}"; do
 done
 
 # 先数本次能 fetch 几个，进度条才能把「第几个仓库」叠进总百分比
-FETCH_TOTAL=0
+FETCH_TOTAL=$(source_count source_has_repo "${TARGETS[@]}")
 FETCH_DONE=0
-for key in "${TARGETS[@]}"; do
-  source_lookup "$key" || continue
-  source_has_repo "$SRC_DIR" && FETCH_TOTAL=$((FETCH_TOTAL + 1))
-done
 
 # ── 主流程 ──────────────────────────────────────────────────────────────
 printf '%s源码学习工作区更新%s  %s\n' "$C_BOLD" "$C_RESET" "$ROOT"

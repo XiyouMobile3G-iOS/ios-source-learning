@@ -189,6 +189,15 @@ assert_fail '已是仓库 → 不 clone' source_needs_clone repo
 assert_ok '已是仓库 → 可 fetch' source_has_repo repo
 rm -rf "$_src"
 
+_src=$(mktemp -d)
+SOURCES_ROOT="$_src"
+assert_eq "$(source_count source_needs_clone jsonmodel)" '1' '缺目录时 clone 计数 1'
+assert_eq "$(source_count source_has_repo jsonmodel)" '0' '缺目录时 fetch 计数 0'
+mkdir -p "$_src/third-party/JSONModel/.git"
+assert_eq "$(source_count source_needs_clone jsonmodel)" '0' '已有仓库时 clone 计数 0'
+assert_eq "$(source_count source_has_repo jsonmodel)" '1' '已有仓库时 fetch 计数 1'
+rm -rf "$_src"
+
 if [ "$FAILS" -ne 0 ]; then
   printf '\n%s 个失败\n' "$FAILS"
   exit 1
