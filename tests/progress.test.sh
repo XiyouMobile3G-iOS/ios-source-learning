@@ -210,6 +210,16 @@ if [ "$FAILS" -eq "$wrap_before" ]; then
   printf '  ok  失败回放剥控制序列且保留 hint\n'
 fi
 
+printf 'RETURN trap 恢复\n'
+PROGRESS_FORCE=1
+PROGRESS_NEWLINE=1
+trap 'progress_test_return_trap=1' RETURN
+return_trap_before="$(trap -p RETURN)"
+git_run_progress 'demo' 0 1 fake_git_progress >/dev/null 2>&1
+return_trap_after="$(trap -p RETURN)"
+assert_eq "$return_trap_after" "$return_trap_before" '保留调用方已有 RETURN trap'
+trap - RETURN
+
 printf '临时日志不泄漏\n'
 _tmp=$(mktemp -d)
 TMPDIR="$_tmp"

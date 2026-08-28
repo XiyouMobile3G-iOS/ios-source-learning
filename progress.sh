@@ -208,7 +208,7 @@ progress_consume() {
 git_run_progress() {
   local label="$1" done="$2" total="$3"
   shift 3
-  local log git_rc=0
+  local log git_rc=0 previous_return
 
   if ! progress_active; then
     "$@"
@@ -218,6 +218,7 @@ git_run_progress() {
   log=$(mktemp) || return 1
   # 只挂 RETURN：progress.sh 被 source，EXIT/INT trap 会盖掉调用方的。
   # 管道放进子 shell + set +e，挡住调用方的 set -eo pipefail，并拿到 PIPESTATUS[0]。
+  previous_return=$(trap -p RETURN)
   trap 'rm -f -- "$log"' RETURN
   git_rc=$(
     set +e
@@ -229,6 +230,10 @@ git_run_progress() {
     cat "$log" >&2
   fi
   rm -f -- "$log"
-  trap - RETURN
+  if [ -n "$previous_return" ]; then
+    eval "$previous_return"
+  else
+    trap - RETURN
+  fi
   return "$git_rc"
 }
