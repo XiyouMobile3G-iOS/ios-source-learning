@@ -87,6 +87,10 @@ assert_eq "$PROGRESS_PCT" '45' 'Receiving percent'
 assert_eq "$PROGRESS_PHASE" '下载' 'Receiving phase'
 assert_eq "$PROGRESS_DETAIL" '12.30 MiB | 2.10 MiB/s' 'Receiving size/speed'
 
+assert_ok 'Receiving objects 多空格对齐的速度' \
+  progress_parse_git_line 'Receiving objects:  45% (555/1234), 12.30 MiB  |  2.10 MiB/s'
+assert_eq "$PROGRESS_DETAIL" '12.30 MiB | 2.10 MiB/s' 'Receiving 多空格 size/speed'
+
 assert_ok 'Receiving objects 100% done' \
   progress_parse_git_line 'Receiving objects: 100% (1234/1234), 50.20 MiB | 3.10 MiB/s, done.'
 assert_eq "$PROGRESS_PCT" '100' 'Receiving done percent'
@@ -127,6 +131,20 @@ printf '%s\n' "$out" | grep -q ' 50%' || { printf '  FAIL 消费流未画出 50%
 grep -qx 'Cloning into x...' "$log" || { printf '  FAIL 非进度行应写入 log\n'; FAILS=$((FAILS + 1)); }
 if [ "$FAILS" -eq "$consume_before" ]; then
   printf '  ok  消费 \\r 进度流并透传非进度行\n'
+fi
+rm -f "$log"
+
+log="$(mktemp)"
+nl_before=$FAILS
+out="$(
+  printf 'Receiving objects:  10%% (10/100), 1.00 MiB | 1.00 MiB/s\nReceiving objects: 100%% (100/100), 9.00 MiB | 2.00 MiB/s, done.\nResolving deltas: 100%% (5/5), done.\nCloning into x...\n' \
+    | progress_consume 'objc4' "$log" 0 2 2>&1
+)"
+printf '%s\n' "$out" | grep -q '  9%' || { printf '  FAIL 纯换行流未画出 9%%\n%s\n' "$out"; FAILS=$((FAILS + 1)); }
+printf '%s\n' "$out" | grep -q ' 50%' || { printf '  FAIL 纯换行流未画出解包 50%%\n%s\n' "$out"; FAILS=$((FAILS + 1)); }
+grep -qx 'Cloning into x...' "$log" || { printf '  FAIL 纯换行流非进度行应写入 log\n'; FAILS=$((FAILS + 1)); }
+if [ "$FAILS" -eq "$nl_before" ]; then
+  printf '  ok  纯 \\n 进度流也能按行切开\n'
 fi
 rm -f "$log"
 
@@ -196,6 +214,8 @@ assert_eq "$(source_count source_has_repo jsonmodel)" '0' '缺目录时 fetch �
 mkdir -p "$_src/third-party/JSONModel/.git"
 assert_eq "$(source_count source_needs_clone jsonmodel)" '0' '已有仓库时 clone 计数 0'
 assert_eq "$(source_count source_has_repo jsonmodel)" '1' '已有仓库时 fetch 计数 1'
+assert_eq "$(source_redact_url 'https://user:token@github.com/a/b.git')" 'https://github.com/a/b.git' '去掉 URL 里的 user:token'
+assert_eq "$(source_redact_url 'https://github.com/a/b.git')" 'https://github.com/a/b.git' '无凭证的 URL 原样返回'
 rm -rf "$_src"
 
 if [ "$FAILS" -ne 0 ]; then

@@ -107,7 +107,7 @@ progress_parse_git_line() {
   PROGRESS_PCT="$pct"
   PROGRESS_PHASE="$phase"
 
-  if [[ "$line" =~ ([0-9][0-9.]*\ [KMG]iB)\ \|\ ([0-9][0-9.]*\ [KMG]iB/s) ]]; then
+  if [[ "$line" =~ ([0-9][0-9.]*\ [KMG]iB)[[:space:]]*\|[[:space:]]*([0-9][0-9.]*\ [KMG]iB/s) ]]; then
     PROGRESS_DETAIL="${BASH_REMATCH[1]} | ${BASH_REMATCH[2]}"
   fi
   return 0
@@ -163,7 +163,8 @@ progress_handle_line() {
 }
 
 # progress_consume <标签> <非进度行日志> <已完成数> <总数>
-# 从 stdin 读 git --progress 的 \r 刷新流。
+# git --progress 用 \r 原地刷新，阶段结束又常只打 \n。外层按 \r 切，
+# 内层再按 \n 切，避免把两行进度黏成一条。
 progress_consume() {
   local label="$1" log="$2" done="$3" total="$4"
   local buf rest line

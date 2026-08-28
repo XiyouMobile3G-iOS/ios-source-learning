@@ -200,9 +200,9 @@ clone_repo() {
   local key="$1" dir="$2" url="$3" policy="$4" ref="$5" filter="$6" tagglob="${7:-}"
   local path="$ROOT/$dir"
 
-  info "下载 $url"
+  info "下载 $(source_redact_url "$url")"
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "[dry-run] git clone ${filter:+$filter }--progress $url $path"
+    info "[dry-run] git clone ${filter:+$filter }--progress $(source_redact_url "$url") $path"
     note "  ${key}  [dry-run] 待下载"
     return 0
   fi
@@ -336,7 +336,8 @@ link_maps() {
   fi
 }
 
-# 先数要下几个，进度条才能把「第几个仓库」叠进总百分比
+# 先数要下几个。TARGETS 就是 wants 从 ALL_TARGETS 筛出来的那批，
+# 谓词与 inspect_local 相同（source_needs_clone），所以和实际 clone 次数对齐。
 CLONE_TOTAL=0
 CLONE_DONE=0
 if [ "$MAPS_ONLY" -eq 0 ] && [ "$CHECK_ONLY" -eq 0 ]; then

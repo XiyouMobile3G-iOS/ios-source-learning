@@ -114,6 +114,11 @@ source_has_repo() {
   [ $? -eq 0 ]
 }
 
+# source_redact_url <url> —— 日志里去掉 user:pass@，避免 token 进终端
+source_redact_url() {
+  printf '%s' "$1" | sed -E 's#(https?://)[^/@]+@#\1#'
+}
+
 # source_count <谓词> <目标名...>
 # 对每个目标 lookup 后对 SRC_DIR 调谓词（source_needs_clone / source_has_repo）。
 source_count() {
