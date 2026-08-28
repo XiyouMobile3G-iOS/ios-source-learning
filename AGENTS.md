@@ -4,7 +4,7 @@
 > `AGENTS.md` 是正文本体（Codex 等 agent 自动加载）；`CLAUDE.md` 是指向它的**符号链接**
 > （Claude Code 自动加载）。两者在磁盘上是同一个文件，**读到任意一个就已经读全，不必再读另一个**。
 >
-> 之所以不用「一份正文 + 一份指针」——那是 `maps/` 下 31 个目录的做法，在这里行不通：
+> 之所以不用「一份正文 + 一份指针」——那是 `maps/` 下各目录的做法，在这里行不通：
 > **指针只在「按需读取」时成立。根目录这两个文件是被自动注入上下文的，指针会被自动注入
 > 这个机制本身架空**——agent 开局就拿到了一句「去读另一个文件」，然后直奔任务，再不回头。
 > 这是实测结论，见规范二末尾。
@@ -292,7 +292,7 @@ CF 的仓库是 `apple-oss-distributions/CF`，`main` 停在 `CF-1153.18`（2021
 - 十一个源码目录都是独立 git 仓库，不做 submodule，一律 `.gitignore`（第三方库整个 `/third-party/` 被忽略），互不干扰。
 - **地图的真身在 `maps/`**，源码树里那些 `AGENTS.md` / `CLAUDE.md` 都是指向它的符号链接（`bootstrap.sh` 挂的）。
   就地编辑 `new objc4/runtime/AGENTS.md` 等于编辑 `maps/new objc4/runtime/AGENTS.md`，改动自动进入本仓库的 `git status`——**记得提交**。
-- **正文一律在 `AGENTS.md`，`CLAUDE.md` 只是三行指针**，31 个目录无一例外。读地图直接读 `AGENTS.md`，
+- **正文一律在 `AGENTS.md`，`CLAUDE.md` 只是三行指针**，各地图目录无一例外。读地图直接读 `AGENTS.md`，
   不要两份都读——`CLAUDE.md` 里没有任何独有内容。
 - 这些链接同时写进了各子仓库的 `.git/info/exclude`，不污染子仓库 `git status`，也就不会让更新脚本因「工作区脏」跳过合并。
 - 新增地图时**必须写进 `maps/` 再跑 `./bootstrap.sh --maps-only` 挂载**；直接在源码树里新建文件会成为游离的未跟踪文件，别人 clone 不到。

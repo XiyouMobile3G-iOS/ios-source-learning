@@ -280,7 +280,7 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 
 - 每份控制在 200 行内，只放**文件表 + 关键符号 + 行号**，不复制源码正文——它的用途是让 agent 少读文件，自己先撑爆上下文就本末倒置了。
 - 引用一律 `文件:行号` + 版本号。三个追 `main` 的仓库（`libdispatch` / `swift-corelibs-foundation` / `swift-foundation`）随时在动，**必须同时记 commit**。
-- **`maps/` 下正文一律写在 `AGENTS.md`，`CLAUDE.md` 一律是那三行指针**，31 个目录无一例外，不要反着放。
+- **`maps/` 下正文一律写在 `AGENTS.md`，`CLAUDE.md` 一律是那三行指针**，各地图目录无一例外，不要反着放。
   理由：`AGENTS.md` 是跨 agent 的通用约定（Codex 等也读），`CLAUDE.md` 是 Claude 专属；
   正文放通用的那份，其他 agent 才不用多跳一次。两份成对存在但**内容不重复**，避免 agent 把两份都读进上下文。
 - **但仓库根目录相反**：根 `CLAUDE.md` 是指向 `AGENTS.md` 的**符号链接**，不是指针文件。
