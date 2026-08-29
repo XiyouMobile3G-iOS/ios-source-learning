@@ -198,17 +198,22 @@ check_ignored() {
 clone_repo() {
   local key="$1" dir="$2" url="$3" policy="$4" ref="$5" filter="$6" tagglob="${7:-}"
   local path="$ROOT/$dir"
+  local clone_args=(git clone)
+  [ -n "$filter" ] && clone_args+=("$filter")
+  clone_args+=(--progress "$url" "$path")
 
   info "下载 $(source_redact_url "$url")"
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "[dry-run] git clone ${filter:+$filter }--progress $(source_redact_url "$url") $path"
+    local display_args=("${clone_args[@]}")
+    local display_command
+    display_args[$((${#display_args[@]} - 2))]="$(source_redact_url "$url")"
+    printf -v display_command '%q ' "${display_args[@]}"
+    info "[dry-run] ${display_command% }"
     note "  ${key}  [dry-run] 待下载"
     return 0
   fi
   # 终端画总进度条；非终端走 git --progress 自己的百分比行。
-  # 有无 --filter 合成一次调用，与上面 dry-run 那行同一套 ${filter:+...}。
-  git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" \
-    git clone ${filter:+$filter }--progress "$url" "$path" \
+  git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" "${clone_args[@]}" \
     || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
   CLONE_DONE=$((CLONE_DONE + 1))
 

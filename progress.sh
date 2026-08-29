@@ -38,26 +38,28 @@ progress_bar_string() {
   printf '%s%s' "${fill_s// /$fill}" "${empty_s// /$empty}"
 }
 
-# 阶段|git 进度行子串|仓库进度起点|宽度。parse 与加权共用，条只往前走：
+# 四个并行数组依次记录阶段名、git 进度行子串、仓库进度起点和宽度。
+# parse 与加权共用，条只往前走：
 # 枚举 0–5，压缩 5–10，下载 10–90，解包 90–100。
-PROGRESS_PHASE_TABLE=(
-  "枚举|Counting objects:|0|5"
-  "压缩|Compressing objects:|5|5"
-  "下载|Receiving objects:|10|80"
-  "解包|Resolving deltas:|90|10"
-)
+PROGRESS_PHASE_NAMES=("枚举" "压缩" "下载" "解包")
+PROGRESS_PHASE_NEEDLES=("Counting objects:" "Compressing objects:" "Receiving objects:" "Resolving deltas:")
+PROGRESS_PHASE_STARTS=(0 5 10 90)
+PROGRESS_PHASE_WIDTHS=(5 5 80 10)
 
 # progress_phase_spec <name|line> <阶段名或 git 输出行>
 # 命中后写入 PROGRESS_SPEC_PHASE / NEEDLE / START / WIDTH。
 progress_phase_spec() {
-  local mode="$1" query="$2" spec phase needle start width
+  local mode="$1" query="$2" index phase needle start width
   PROGRESS_SPEC_PHASE=""
   PROGRESS_SPEC_NEEDLE=""
   PROGRESS_SPEC_START=0
   PROGRESS_SPEC_WIDTH=0
 
-  for spec in "${PROGRESS_PHASE_TABLE[@]}"; do
-    IFS='|' read -r phase needle start width <<< "$spec"
+  for index in "${!PROGRESS_PHASE_NAMES[@]}"; do
+    phase="${PROGRESS_PHASE_NAMES[$index]:-}"
+    needle="${PROGRESS_PHASE_NEEDLES[$index]:-}"
+    start="${PROGRESS_PHASE_STARTS[$index]:-}"
+    width="${PROGRESS_PHASE_WIDTHS[$index]:-}"
     [ -n "$phase" ] && [ -n "$needle" ] && [ -n "$start" ] && [ -n "$width" ] || continue
     case "$start:$width" in
       *[!0-9:]*) continue ;;

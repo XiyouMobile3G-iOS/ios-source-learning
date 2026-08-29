@@ -76,11 +76,11 @@ assert_eq "$(progress_phase_pct 下载 100)" '90' '下载 100% → 90'
 assert_eq "$(progress_phase_pct 解包 0)"   '90' '解包 0% → 90'
 assert_eq "$(progress_phase_pct 解包 100)" '100' '解包 100% → 100'
 
-phase_table_saved=("${PROGRESS_PHASE_TABLE[@]}")
-PROGRESS_PHASE_TABLE=("broken" "${phase_table_saved[@]}")
+broken_phase_index=${#PROGRESS_PHASE_NAMES[@]}
+PROGRESS_PHASE_NAMES+=("broken")
 assert_eq "$(progress_phase_pct 未知 37)" '37' '损坏或未知阶段安全回退原百分比'
 assert_fail '损坏表项不误认普通日志' progress_parse_git_line 'ordinary output: 50%'
-PROGRESS_PHASE_TABLE=("${phase_table_saved[@]}")
+unset "PROGRESS_PHASE_NAMES[$broken_phase_index]"
 
 printf '整体百分比（已完成仓库 + 当前仓库进度）\n'
 assert_eq "$(progress_overall_pct 0 0 5)"   '0'  '尚未开始'
@@ -285,8 +285,11 @@ assert_eq "$(source_redact_url 'https://user:token@github.com/a/b.git')" 'https:
 assert_eq "$(source_redact_url 'https://github.com/a/b.git')" 'https://github.com/a/b.git' '无凭证的 URL 原样返回'
 assert_eq "$(source_redact_url 'https://github.com/a/b.git?access_token=secret&ref=main')" 'https://github.com/a/b.git?access_token=REDACTED&ref=main' '去掉 query 里的 access token'
 assert_eq "$(source_redact_url 'ssh://git@github.com/a/b.git?token=secret')" 'ssh://github.com/a/b.git?token=REDACTED' '去掉 SSH user 和 query token'
+assert_eq "$(source_redact_url 'git+ssh://git:secret@github.com/a/b.git')" 'git+ssh://github.com/a/b.git' '任意 URI scheme 都去掉 userinfo'
 assert_eq "$(source_redact_url 'https://github.com/a/b.git#token=secret')" 'https://github.com/a/b.git#token=REDACTED' '去掉 fragment 里的 token'
 assert_eq "$(source_redact_url 'https://github.com/a/b.git?X-Amz-Signature=abc')" 'https://github.com/a/b.git?X-Amz-Signature=REDACTED' '去掉签名参数'
+assert_eq "$(source_redact_url 'https://github.com/a/b.git?X-Amz-Credential=abc')" 'https://github.com/a/b.git?X-Amz-Credential=REDACTED' '去掉凭据参数'
+assert_eq "$(source_redact_url 'https://github.com/a/b.git?client_secret=abc')" 'https://github.com/a/b.git?client_secret=REDACTED' '按敏感键名脱敏'
 rm -rf "$_src"
 
 if [ "$FAILS" -ne 0 ]; then

@@ -118,8 +118,8 @@ source_has_repo() {
 source_redact_url() {
   printf '%s' "$1" \
     | sed -E \
-        -e 's#(https?|ssh)://[^/@[:space:]]+@#\1://#' \
-        -e 's#([?&#](access[_-]?token|api[_-]?key|auth|credential|github[_-]?token|key|oauth[_-]?token|password|passwd|private[_-]?token|sig|token|X-Amz-Signature)=)[^&#[:space:]]*#\1REDACTED#g'
+        -e 's#([[:alpha:]][[:alnum:]+.-]*://)[^/@[:space:]]+@#\1#' \
+        -e 's#([?&#][^=&#[:space:]]*(access|auth|credential|key|password|passwd|secret|sig|signature|token)[^=&#[:space:]]*=)[^&#[:space:]]*#\1REDACTED#gI'
 }
 
 # source_count <谓词> <目标名...>
