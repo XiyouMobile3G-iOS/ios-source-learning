@@ -205,13 +205,14 @@ clone_repo() {
   else
     clone_args+=(--quiet)
   fi
+  local url_index=${#clone_args[@]}
   clone_args+=("$url" "$path")
 
   info "下载 $(source_redact_url "$url")"
   if [ "$DRY_RUN" -eq 1 ]; then
     local display_args=("${clone_args[@]}")
     local display_command
-    display_args[$((${#display_args[@]} - 2))]="$(source_redact_url "$url")"
+    display_args[$url_index]="$(source_redact_url "$url")"
     printf -v display_command '%q ' "${display_args[@]}"
     info "[dry-run] ${display_command% }"
     note "  ${key}  [dry-run] 待下载"

@@ -158,9 +158,9 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 
 终端里下载会画一条进度条，把当前仓库的 git 传输百分比叠到「第几个仓库」上，例如
 `[████░░░░]  30%  objc4  2/10  下载  120.4 MiB | 3.1 MiB/s`。
-非终端默认不画自定义进度条：`bootstrap.sh` 让 git 输出 `Receiving objects: xx%`，
-`update-sources.sh` 为避免批量 fetch 刷屏则使用 `--quiet`；设置测试用的
-`PROGRESS_FORCE` 时，非终端也会画自定义进度条。
+非终端默认不画自定义进度条，`bootstrap.sh` 和 `update-sources.sh` 都使用 `--quiet`，
+避免把批量下载或 fetch 的进度混入普通日志；设置测试用的 `PROGRESS_FORCE` 时，
+非终端也会画自定义进度条。
 
 **下载前会先核对本地**，这也是它可以随便重复跑的原因：
 

@@ -90,7 +90,9 @@ update_git_repo() {
 
   local attempt=1 fetched=0
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "[dry-run] git fetch --all --tags --prune --progress"
+    local progress_flag=--quiet
+    progress_active && progress_flag=--progress
+    info "[dry-run] git fetch --all --tags --prune ${progress_flag}"
     fetched=1
   else
     while [ ${attempt} -le "$RETRIES" ]; do
