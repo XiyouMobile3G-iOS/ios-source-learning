@@ -7,6 +7,8 @@
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../sources.sh
+. "$ROOT/sources.sh"
 # shellcheck source=../progress.sh
 . "$ROOT/progress.sh"
 
@@ -73,6 +75,12 @@ assert_eq "$(progress_phase_pct 下载 50)"  '50' '下载 50% → 50'
 assert_eq "$(progress_phase_pct 下载 100)" '90' '下载 100% → 90'
 assert_eq "$(progress_phase_pct 解包 0)"   '90' '解包 0% → 90'
 assert_eq "$(progress_phase_pct 解包 100)" '100' '解包 100% → 100'
+
+phase_table_saved=("${PROGRESS_PHASE_TABLE[@]}")
+PROGRESS_PHASE_TABLE=("broken" "${phase_table_saved[@]}")
+assert_eq "$(progress_phase_pct 未知 37)" '37' '损坏或未知阶段安全回退原百分比'
+assert_fail '损坏表项不误认普通日志' progress_parse_git_line 'ordinary output: 50%'
+PROGRESS_PHASE_TABLE=("${phase_table_saved[@]}")
 
 printf '整体百分比（已完成仓库 + 当前仓库进度）\n'
 assert_eq "$(progress_overall_pct 0 0 5)"   '0'  '尚未开始'
@@ -254,8 +262,6 @@ rm -rf "$_tmp"
 unset TMPDIR
 
 printf 'clone / fetch 谓词\n'
-# shellcheck source=../sources.sh
-. "$ROOT/sources.sh"
 _src=$(mktemp -d)
 SOURCES_ROOT="$_src"
 assert_ok '目录不存在 → 需要 clone' source_needs_clone missing

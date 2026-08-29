@@ -47,21 +47,49 @@ PROGRESS_PHASE_TABLE=(
   "解包|Resolving deltas:|90|10"
 )
 
+# progress_phase_spec <name|line> <阶段名或 git 输出行>
+# 命中后写入 PROGRESS_SPEC_PHASE / NEEDLE / START / WIDTH。
+progress_phase_spec() {
+  local mode="$1" query="$2" spec phase needle start width
+  PROGRESS_SPEC_PHASE=""
+  PROGRESS_SPEC_NEEDLE=""
+  PROGRESS_SPEC_START=0
+  PROGRESS_SPEC_WIDTH=0
+
+  for spec in "${PROGRESS_PHASE_TABLE[@]}"; do
+    IFS='|' read -r phase needle start width <<< "$spec"
+    [ -n "$phase" ] && [ -n "$needle" ] && [ -n "$start" ] && [ -n "$width" ] || continue
+    case "$start:$width" in
+      *[!0-9:]*) continue ;;
+    esac
+    if [ "$mode" = "name" ] && [ "$phase" = "$query" ]; then
+      :
+    elif [ "$mode" = "line" ] && [[ "$query" == *"$needle"* ]]; then
+      :
+    else
+      continue
+    fi
+    PROGRESS_SPEC_PHASE="$phase"
+    PROGRESS_SPEC_NEEDLE="$needle"
+    PROGRESS_SPEC_START="$start"
+    PROGRESS_SPEC_WIDTH="$width"
+    return 0
+  done
+  return 1
+}
+
 # progress_phase_pct <阶段> <该阶段 0-100>
 progress_phase_pct() {
-  local phase="$1" pct="$2" spec p needle start width
+  local phase="$1" pct="$2"
   case "$pct" in
     ''|*[!0-9]*) pct=0 ;;
   esac
   [ "$pct" -lt 0 ] && pct=0
   [ "$pct" -gt 100 ] && pct=100
-  for spec in "${PROGRESS_PHASE_TABLE[@]}"; do
-    IFS='|' read -r p needle start width <<< "$spec"
-    if [ "$p" = "$phase" ]; then
-      printf '%s' $(( start + pct * width / 100 ))
-      return 0
-    fi
-  done
+  if progress_phase_spec name "$phase"; then
+    printf '%s' $(( PROGRESS_SPEC_START + pct * PROGRESS_SPEC_WIDTH / 100 ))
+    return 0
+  fi
   printf '%s' "$pct"
 }
 
@@ -92,16 +120,9 @@ progress_parse_git_line() {
   PROGRESS_DETAIL=""
   [ -n "$line" ] || return 1
 
-  local phase="" spec p needle start width
-  for spec in "${PROGRESS_PHASE_TABLE[@]}"; do
-    IFS='|' read -r p needle start width <<< "$spec"
-    case "$line" in
-      *"$needle"*) phase="$p"; break ;;
-    esac
-  done
-  [ -n "$phase" ] || return 1
+  progress_phase_spec line "$line" || return 1
 
-  local pct="" progress_tail="${line#*"$needle"}"
+  local pct="" progress_tail="${line#*"$PROGRESS_SPEC_NEEDLE"}"
   if [[ "$progress_tail" =~ ([0-9]+)% ]]; then
     pct="${BASH_REMATCH[1]}"
   else
@@ -110,7 +131,7 @@ progress_parse_git_line() {
   [ "$pct" -gt 100 ] && pct=100
 
   PROGRESS_PCT="$pct"
-  PROGRESS_PHASE="$phase"
+  PROGRESS_PHASE="$PROGRESS_SPEC_PHASE"
 
   if [[ "$line" =~ ([0-9][0-9.]*\ [KMG]iB)[[:space:]]*\|[[:space:]]*([0-9][0-9.]*\ [KMG]iB/s) ]]; then
     PROGRESS_DETAIL="${BASH_REMATCH[1]} | ${BASH_REMATCH[2]}"
@@ -155,10 +176,7 @@ progress_sanitize_line() {
 }
 
 progress_redact_line() {
-  printf '%s' "$1" \
-    | sed -E \
-        -e 's#(https?|ssh)://[^/@[:space:]]+@#\1://#g' \
-        -e 's#([?&](access[_-]?token|api[_-]?key|auth|credential|github[_-]?token|key|oauth[_-]?token|password|passwd|private[_-]?token|sig|token|X-Amz-Signature)=)[^&#[:space:]]*#\1REDACTED#g'
+  source_redact_url "$1"
 }
 
 progress_handle_line() {

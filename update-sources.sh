@@ -89,25 +89,25 @@ update_git_repo() {
   info "分支 ${branch} @ ${before}，未提交改动 ${dirty} 处"
 
   local attempt=1 fetched=0
-  while [ ${attempt} -le "$RETRIES" ]; do
-    if [ "$DRY_RUN" -eq 1 ]; then
-      info "[dry-run] git fetch --all --tags --prune --progress"
-      fetched=1
-      break
-    fi
-    local fetch_cmd=(git -C "${dir}" fetch --all --tags --prune)
-    if progress_active; then
-      fetch_cmd+=(--progress)
-    else
-      fetch_cmd+=(--quiet)
-    fi
-    if git_run_progress "$name" "$FETCH_DONE" "$FETCH_TOTAL" "${fetch_cmd[@]}"; then
-      fetched=1
-      break
-    fi
-    [ ${attempt} -lt "$RETRIES" ] && warn "fetch 第 ${attempt} 次失败，${RETRY_WAIT}s 后重试" && sleep "$RETRY_WAIT"
-    attempt=$((attempt + 1))
-  done
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "[dry-run] git fetch --all --tags --prune --progress"
+    fetched=1
+  else
+    while [ ${attempt} -le "$RETRIES" ]; do
+      local fetch_cmd=(git -C "${dir}" fetch --all --tags --prune)
+      if progress_active; then
+        fetch_cmd+=(--progress)
+      else
+        fetch_cmd+=(--quiet)
+      fi
+      if git_run_progress "$name" "$FETCH_DONE" "$FETCH_TOTAL" "${fetch_cmd[@]}"; then
+        fetched=1
+        break
+      fi
+      [ ${attempt} -lt "$RETRIES" ] && warn "fetch 第 ${attempt} 次失败，${RETRY_WAIT}s 后重试" && sleep "$RETRY_WAIT"
+      attempt=$((attempt + 1))
+    done
+  fi
   if [ ${fetched} -ne 1 ]; then
     err "${name}: fetch 连续 $RETRIES 次失败（网络？SSH key？）"
     note "  ${name}  ${C_RED}fetch 失败${C_RESET}"
