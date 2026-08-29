@@ -111,8 +111,10 @@ update_git_repo() {
   if [ ${fetched} -ne 1 ]; then
     err "${name}: fetch 连续 $RETRIES 次失败（网络？SSH key？）"
     note "  ${name}  ${C_RED}fetch 失败${C_RESET}"
+    FETCH_DONE=$((FETCH_DONE + 1))
     return
   fi
+  # 成功（或 dry-run）和失败都已处理当前仓库，保持后续仓库序号稳定。
   FETCH_DONE=$((FETCH_DONE + 1))
   ok "已 fetch 远端 + tags"
 

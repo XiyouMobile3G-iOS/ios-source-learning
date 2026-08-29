@@ -200,7 +200,12 @@ clone_repo() {
   local path="$ROOT/$dir"
   local clone_args=(git clone)
   [ -n "$filter" ] && clone_args+=("$filter")
-  clone_args+=(--progress "$url" "$path")
+  if progress_active; then
+    clone_args+=(--progress)
+  else
+    clone_args+=(--quiet)
+  fi
+  clone_args+=("$url" "$path")
 
   info "下载 $(source_redact_url "$url")"
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -212,9 +217,9 @@ clone_repo() {
     note "  ${key}  [dry-run] 待下载"
     return 0
   fi
-  # 终端画总进度条；非终端走 git --progress 自己的百分比行。
+  # 终端画总进度条；非终端保持安静，避免把 clone 进度混入普通日志。
   git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" "${clone_args[@]}" \
-    || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
+    || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; CLONE_DONE=$((CLONE_DONE + 1)); FAILED=1; return 1; }
   CLONE_DONE=$((CLONE_DONE + 1))
 
   case "$policy" in
