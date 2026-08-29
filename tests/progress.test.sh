@@ -223,6 +223,23 @@ return_trap_after="$(trap -p RETURN)"
 assert_eq "$return_trap_after" "$return_trap_before" '保留调用方已有 RETURN trap'
 trap - RETURN
 
+printf '调用方 errexit / pipefail\n'
+pipefail_tmp=$(mktemp -d)
+if (
+  set -eo pipefail
+  TMPDIR="$pipefail_tmp"
+  export TMPDIR
+  rc=0
+  git_run_progress 'demo' 0 1 fake_git_fail >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 128 ]
+); then
+  assert_eq "$(find "$pipefail_tmp" -type f | wc -l | tr -d ' ')" '0' 'errexit/pipefail 下保留退出码并清理日志'
+else
+  printf '  FAIL errexit/pipefail 下应保留失败退出码\n'
+  FAILS=$((FAILS + 1))
+fi
+rm -rf "$pipefail_tmp"
+
 printf '临时日志不泄漏\n'
 _tmp=$(mktemp -d)
 TMPDIR="$_tmp"

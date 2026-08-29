@@ -4,7 +4,7 @@
 #
 # 被 source 进去，本身不做事。终端下把 git --progress 的 \r 刷新画成一条
 # `[████░░░░]  42%  objc4  2/10  下载  120.4 MiB | 3.1 MiB/s`；
-# 非终端不画条，让 git 自己的 `Receiving objects: xx%` 进日志。
+# 非终端不画条，由调用方选择 git 原生进度或静默输出。
 #
 # 环境变量（测试用）：
 #   PROGRESS_FILL / PROGRESS_EMPTY  条的实心/空心字符
@@ -218,7 +218,7 @@ progress_consume() {
 git_run_progress() {
   local label="$1" done="$2" total="$3"
   shift 3
-  local log git_rc=0 previous_return
+  local log git_rc=0
 
   if ! progress_active; then
     "$@"
@@ -226,10 +226,8 @@ git_run_progress() {
   fi
 
   log=$(mktemp) || return 1
-  # 只挂 RETURN：progress.sh 被 source，EXIT/INT trap 会盖掉调用方的。
-  # 管道放进子 shell + set +e，挡住调用方的 set -eo pipefail，并拿到 PIPESTATUS[0]。
-  previous_return=$(trap -p RETURN)
-  trap 'rm -f -- "$log"' RETURN
+  # 管道放进子 shell并关闭 errexit，确保能立即取得 git 的 PIPESTATUS[0]；
+  # 不修改调用方的 trap 或 shell 选项，临时日志在管道返回后统一清理。
   git_rc=$(
     set +e
     "$@" 2>&1 | progress_consume "$label" "$log" "$done" "$total"
@@ -240,10 +238,5 @@ git_run_progress() {
     cat "$log" >&2
   fi
   rm -f -- "$log"
-  if [ -n "$previous_return" ]; then
-    eval "$previous_return"
-  else
-    trap - RETURN
-  fi
   return "$git_rc"
 }
