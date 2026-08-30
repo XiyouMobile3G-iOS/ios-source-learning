@@ -28,6 +28,8 @@ if [ ! -f "$ROOT/sources.sh" ]; then
 fi
 # shellcheck source=sources.sh
 . "$ROOT/sources.sh"
+# shellcheck source=progress.sh
+. "$ROOT/progress.sh"
 
 DRY_RUN=0
 FORCE=0
@@ -87,19 +89,35 @@ update_git_repo() {
   info "分支 ${branch} @ ${before}，未提交改动 ${dirty} 处"
 
   local attempt=1 fetched=0
-  while [ ${attempt} -le "$RETRIES" ]; do
-    if run git -C "${dir}" fetch --all --tags --prune --quiet; then
-      fetched=1
-      break
-    fi
-    [ ${attempt} -lt "$RETRIES" ] && warn "fetch 第 ${attempt} 次失败，${RETRY_WAIT}s 后重试" && sleep "$RETRY_WAIT"
-    attempt=$((attempt + 1))
-  done
+  if [ "$DRY_RUN" -eq 1 ]; then
+    local progress_flag=--quiet
+    progress_active && progress_flag=--progress
+    info "[dry-run] git fetch --all --tags --prune ${progress_flag}"
+    fetched=1
+  else
+    while [ ${attempt} -le "$RETRIES" ]; do
+      local fetch_cmd=(git -C "${dir}" fetch --all --tags --prune)
+      if progress_active; then
+        fetch_cmd+=(--progress)
+      else
+        fetch_cmd+=(--quiet)
+      fi
+      if git_run_progress "$name" "$FETCH_DONE" "$FETCH_TOTAL" "${fetch_cmd[@]}"; then
+        fetched=1
+        break
+      fi
+      [ ${attempt} -lt "$RETRIES" ] && warn "fetch 第 ${attempt} 次失败，${RETRY_WAIT}s 后重试" && sleep "$RETRY_WAIT"
+      attempt=$((attempt + 1))
+    done
+  fi
   if [ ${fetched} -ne 1 ]; then
     err "${name}: fetch 连续 $RETRIES 次失败（网络？SSH key？）"
     note "  ${name}  ${C_RED}fetch 失败${C_RESET}"
+    FETCH_DONE=$((FETCH_DONE + 1))
     return
   fi
+  # 成功（或 dry-run）和失败都已处理当前仓库，保持后续仓库序号稳定。
+  FETCH_DONE=$((FETCH_DONE + 1))
   ok "已 fetch 远端 + tags"
 
   # objc4 这类「自建分支 + 本地地图」的仓库只报告，不动工作区
@@ -232,9 +250,14 @@ for t in "${TARGETS[@]}"; do
   source_lookup "$t" || { err "未知目标 ${t}（可用：${ALL_TARGETS[*]}）"; exit 1; }
 done
 
+# 先数本次能 fetch 几个，进度条才能把「第几个仓库」叠进总百分比
+FETCH_TOTAL=$(source_count source_has_repo "${TARGETS[@]}")
+FETCH_DONE=0
+
 # ── 主流程 ──────────────────────────────────────────────────────────────
 printf '%s源码学习工作区更新%s  %s\n' "$C_BOLD" "$C_RESET" "$ROOT"
 [ "$DRY_RUN" -eq 1 ] && warn "dry-run 模式，不会做任何改动"
+[ "$FETCH_TOTAL" -gt 0 ] && info "将 fetch ${FETCH_TOTAL} 个仓库（终端下显示进度条）"
 
 # 清单里的策略在这里翻译成更新模式：
 #   pinned → fetch-only  钉住的 tag，只 fetch 报告新版本，永不动工作区

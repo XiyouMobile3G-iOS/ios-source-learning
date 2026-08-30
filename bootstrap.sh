@@ -28,6 +28,7 @@
 #    仍然是被版本管理的那份文件，不会漂移。
 #
 # 源码清单在同目录的 sources.sh，与 check-updates.sh / update-sources.sh 共用。
+# 下载进度条在 progress.sh，clone / fetch 共用。
 #
 # 搭好之后的日常循环见 README.md：check-updates.sh → update-sources.sh。
 #
@@ -78,6 +79,8 @@ if [ ! -f "$ROOT/sources.sh" ]; then
 fi
 # shellcheck source=sources.sh
 . "$ROOT/sources.sh"
+# shellcheck source=progress.sh
+. "$ROOT/progress.sh"
 
 # ── 参数解析 ────────────────────────────────────────────────────────────
 TARGETS=()
@@ -118,8 +121,9 @@ inspect_local() {
   local key="$1" dir="$2" url="$3" policy="$4" ref="$5"
   local path="$ROOT/$dir"
 
-  source_local_state "$dir"
-  case $? in
+  local local_state=0
+  source_local_state "$dir" || local_state=$?
+  case "$local_state" in
     1) return 1 ;;
     2)
       err "$dir 已存在但不是 git 仓库，未覆盖，请先手动移走"
@@ -194,14 +198,30 @@ check_ignored() {
 clone_repo() {
   local key="$1" dir="$2" url="$3" policy="$4" ref="$5" filter="$6" tagglob="${7:-}"
   local path="$ROOT/$dir"
-
-  info "下载 $url"
-  if [ -n "$filter" ]; then
-    run git clone $filter --quiet "$url" "$path" || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
+  local clone_args=(git clone)
+  [ -n "$filter" ] && clone_args+=("$filter")
+  if progress_active; then
+    clone_args+=(--progress)
   else
-    run git clone --quiet "$url" "$path" || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; FAILED=1; return 1; }
+    clone_args+=(--quiet)
   fi
-  [ "$DRY_RUN" -eq 1 ] && { note "  ${key}  [dry-run] 待下载"; return 0; }
+  local url_index=${#clone_args[@]}
+  clone_args+=("$url" "$path")
+
+  info "下载 $(source_redact_url "$url")"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    local display_args=("${clone_args[@]}")
+    local display_command
+    display_args[$url_index]="$(source_redact_url "$url")"
+    printf -v display_command '%q ' "${display_args[@]}"
+    info "[dry-run] ${display_command% }"
+    note "  ${key}  [dry-run] 待下载"
+    return 0
+  fi
+  # 终端画总进度条；非终端保持安静，避免把 clone 进度混入普通日志。
+  git_run_progress "$key" "$CLONE_DONE" "$CLONE_TOTAL" "${clone_args[@]}" \
+    || { err "下载失败"; note "  ${key}  ${C_RED}下载失败${C_RESET}"; CLONE_DONE=$((CLONE_DONE + 1)); FAILED=1; return 1; }
+  CLONE_DONE=$((CLONE_DONE + 1))
 
   case "$policy" in
     pinned)
@@ -321,11 +341,20 @@ link_maps() {
   fi
 }
 
+# 先数要下几个。TARGETS 就是 wants 从 ALL_TARGETS 筛出来的那批；只统计不存在的目录，
+# 被占用的目录不计入下载总数，随后仍由 inspect_local 报冲突并跳过。
+CLONE_TOTAL=0
+CLONE_DONE=0
+if [ "$MAPS_ONLY" -eq 0 ] && [ "$CHECK_ONLY" -eq 0 ]; then
+  CLONE_TOTAL=$(source_count source_needs_clone "${TARGETS[@]}")
+fi
+
 # ── 主流程 ──────────────────────────────────────────────────────────────
 printf '%s源码学习工作区初始化%s  %s\n' "$C_BOLD" "$C_RESET" "$ROOT"
 [ "$DRY_RUN" -eq 1 ]    && warn "dry-run 模式，不会做任何改动"
 [ "$CHECK_ONLY" -eq 1 ] && warn "check 模式，只体检不改动"
 [ "$MAPS_ONLY" -eq 1 ] && warn "只挂地图，不克隆源码"
+[ "$CLONE_TOTAL" -gt 0 ] && info "将下载 ${CLONE_TOTAL} 个仓库（终端下显示进度条）"
 
 for key in "${ALL_TARGETS[@]}"; do
   wants "$key" || continue

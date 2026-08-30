@@ -1,0 +1,262 @@
+#!/bin/bash
+#
+# progress.sh —— 给 bootstrap.sh / update-sources.sh 用的 git 传输进度条
+#
+# 被 source 进去，本身不做事。终端下把 git --progress 的 \r 刷新画成一条
+# `[████░░░░]  42%  objc4  2/10  下载  120.4 MiB | 3.1 MiB/s`；
+# 非终端不画条，由调用方选择 git 原生进度或静默输出。
+#
+# 环境变量（测试用）：
+#   PROGRESS_FILL / PROGRESS_EMPTY  条的实心/空心字符
+#   PROGRESS_WIDTH                  条宽，默认 24
+#   PROGRESS_FORCE                  非 TTY 也画条
+#   PROGRESS_NEWLINE                每次刷新换行（便于测），默认用 \r 原地更新
+#
+
+# progress_bar_string <宽度> <0-100>
+progress_bar_string() {
+  local width="$1" pct="$2"
+  local fill="${PROGRESS_FILL:-█}"
+  local empty="${PROGRESS_EMPTY:-░}"
+  local filled rest fill_s empty_s
+
+  case "$width" in
+    ''|*[!0-9]*) width=24 ;;
+  esac
+  case "$pct" in
+    ''|*[!0-9]*) pct=0 ;;
+  esac
+  [ "$pct" -lt 0 ] && pct=0
+  [ "$width" -gt 0 ] || width=1
+  [ "$pct" -gt 100 ] && pct=100
+
+  # printf 填空格再换字符；不用 tr，macOS tr 会把多字节的 █ 拆开
+  filled=$((pct * width / 100))
+  rest=$((width - filled))
+  fill_s=$(printf '%*s' "$filled" '')
+  empty_s=$(printf '%*s' "$rest" '')
+  printf '%s%s' "${fill_s// /$fill}" "${empty_s// /$empty}"
+}
+
+# 四个并行数组依次记录阶段名、git 进度行子串、仓库进度起点和宽度。
+# parse 与加权共用，条只往前走：
+# 枚举 0–5，压缩 5–10，下载 10–90，解包 90–100。
+PROGRESS_PHASE_NAMES=("枚举" "压缩" "下载" "解包")
+PROGRESS_PHASE_NEEDLES=("Counting objects:" "Compressing objects:" "Receiving objects:" "Resolving deltas:")
+PROGRESS_PHASE_STARTS=(0 5 10 90)
+PROGRESS_PHASE_WIDTHS=(5 5 80 10)
+
+# progress_phase_spec <name|line> <阶段名或 git 输出行>
+# 命中后写入 PROGRESS_SPEC_PHASE / NEEDLE / START / WIDTH。
+progress_phase_spec() {
+  local mode="$1" query="$2" index phase needle start width
+  PROGRESS_SPEC_PHASE=""
+  PROGRESS_SPEC_NEEDLE=""
+  PROGRESS_SPEC_START=0
+  PROGRESS_SPEC_WIDTH=0
+
+  for index in "${!PROGRESS_PHASE_NAMES[@]}"; do
+    phase="${PROGRESS_PHASE_NAMES[$index]:-}"
+    needle="${PROGRESS_PHASE_NEEDLES[$index]:-}"
+    start="${PROGRESS_PHASE_STARTS[$index]:-}"
+    width="${PROGRESS_PHASE_WIDTHS[$index]:-}"
+    [ -n "$phase" ] && [ -n "$needle" ] && [ -n "$start" ] && [ -n "$width" ] || continue
+    case "$start:$width" in
+      *[!0-9:]*) continue ;;
+    esac
+    if [ "$mode" = "name" ] && [ "$phase" = "$query" ]; then
+      :
+    elif [ "$mode" = "line" ] && [[ "$query" == *"$needle"* ]]; then
+      :
+    else
+      continue
+    fi
+    PROGRESS_SPEC_PHASE="$phase"
+    PROGRESS_SPEC_NEEDLE="$needle"
+    PROGRESS_SPEC_START="$start"
+    PROGRESS_SPEC_WIDTH="$width"
+    return 0
+  done
+  return 1
+}
+
+# progress_phase_pct <阶段> <该阶段 0-100>
+progress_phase_pct() {
+  local phase="$1" pct="$2"
+  case "$pct" in
+    ''|*[!0-9]*) pct=0 ;;
+  esac
+  [ "$pct" -lt 0 ] && pct=0
+  [ "$pct" -gt 100 ] && pct=100
+  if progress_phase_spec name "$phase"; then
+    printf '%s' $(( PROGRESS_SPEC_START + pct * PROGRESS_SPEC_WIDTH / 100 ))
+    return 0
+  fi
+  printf '%s' "$pct"
+}
+
+# progress_overall_pct <已完成仓库数> <当前仓库 0-100> <总仓库数>
+# 把「第几个仓库」和当前仓库内部百分比叠成一条 0–100 的总进度。
+progress_overall_pct() {
+  local done="$1" current="$2" total="$3"
+  case "$done" in ''|*[!0-9]*) done=0 ;; esac
+  case "$current" in ''|*[!0-9]*) current=0 ;; esac
+  case "$total" in ''|*[!0-9]*) total=0 ;; esac
+  [ "$current" -gt 100 ] && current=100
+  if [ "$total" -le 0 ]; then
+    printf '0'
+    return 0
+  fi
+  [ "$done" -gt "$total" ] && done="$total"
+  local overall=$(( (done * 100 + current) / total ))
+  [ "$overall" -gt 100 ] && overall=100
+  printf '%s' "$overall"
+}
+
+# progress_parse_git_line <一行>
+# 命中则写 PROGRESS_PCT / PROGRESS_PHASE / PROGRESS_DETAIL 并返回 0。
+progress_parse_git_line() {
+  local line="$1"
+  PROGRESS_PCT=0
+  PROGRESS_PHASE=""
+  PROGRESS_DETAIL=""
+  [ -n "$line" ] || return 1
+
+  progress_phase_spec line "$line" || return 1
+
+  local pct="" progress_tail="${line#*"$PROGRESS_SPEC_NEEDLE"}"
+  if [[ "$progress_tail" =~ ([0-9]+)% ]]; then
+    pct="${BASH_REMATCH[1]}"
+  else
+    return 1
+  fi
+  [ "$pct" -gt 100 ] && pct=100
+
+  PROGRESS_PCT="$pct"
+  PROGRESS_PHASE="$PROGRESS_SPEC_PHASE"
+
+  if [[ "$line" =~ ([0-9][0-9.]*\ [KMG]iB)[[:space:]]*\|[[:space:]]*([0-9][0-9.]*\ [KMG]iB/s) ]]; then
+    PROGRESS_DETAIL="${BASH_REMATCH[1]} | ${BASH_REMATCH[2]}"
+  fi
+  return 0
+}
+
+# 终端 stderr，或测试里设了 PROGRESS_FORCE，才画条 / 收尾行。
+progress_active() {
+  [ -t 2 ] || [ -n "${PROGRESS_FORCE:-}" ]
+}
+
+progress_draw() {
+  local pct="$1" text="$2"
+  local width="${PROGRESS_WIDTH:-24}"
+  local bar msg
+  bar=$(progress_bar_string "$width" "$pct")
+  msg=$(printf '  [%s] %3d%%  %s' "$bar" "$pct" "$text")
+
+  if [ -n "${PROGRESS_NEWLINE:-}" ]; then
+    printf '%s\n' "$msg" >&2
+    return 0
+  fi
+  if progress_active; then
+    printf '\r%s\033[K' "$msg" >&2
+  fi
+}
+
+progress_end() {
+  [ -n "${PROGRESS_NEWLINE:-}" ] && return 0
+  if progress_active; then
+    printf '\n' >&2
+  fi
+}
+
+# 剥 CSI / OSC，再删剩余 C0/DEL（留 tab）。失败回放 git stderr 时，
+# 不把远程注入的终端控制序列打到用户终端上。
+progress_sanitize_line() {
+  printf '%s' "$1" \
+    | sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033][^\007]*\007//g' \
+    | tr -d '\000-\010\013-\037\177'
+}
+
+progress_redact_line() {
+  source_redact_url "$1"
+}
+
+progress_handle_line() {
+  local line="$1" label="$2" log="$3" done="$4" total="$5"
+  line="${line%$'\n'}"
+  line="${line%$'\r'}"
+  line=$(progress_sanitize_line "$line")
+  line=$(progress_redact_line "$line")
+  [ -n "$line" ] || return 0
+
+  if progress_parse_git_line "$line"; then
+    local overall idx text repo_pct
+    repo_pct=$(progress_phase_pct "$PROGRESS_PHASE" "$PROGRESS_PCT")
+    overall=$(progress_overall_pct "$done" "$repo_pct" "$total")
+    idx=$((done + 1))
+    text="$label"
+    if [ "$total" -gt 0 ]; then
+      [ "$idx" -gt "$total" ] && idx="$total"
+      text="$label  ${idx}/${total}"
+    fi
+    [ -n "$PROGRESS_PHASE" ] && text="${text}  ${PROGRESS_PHASE}"
+    [ -n "$PROGRESS_DETAIL" ] && text="${text}  ${PROGRESS_DETAIL}"
+    progress_draw "$overall" "$text"
+  else
+    printf '%s\n' "$line" >> "$log"
+  fi
+}
+
+# progress_consume <标签> <非进度行日志> <已完成数> <总数>
+# git --progress 用 \r 原地刷新，阶段结束又常只打 \n。外层按 \r 切，
+# 内层再按 \n 切，避免把两行进度黏成一条。
+progress_consume() {
+  local label="$1" log="$2" done="$3" total="$4"
+  local buf rest line
+
+  while IFS= read -r -d $'\r' buf || [ -n "$buf" ]; do
+    rest="$buf"
+    while [ -n "$rest" ]; do
+      case "$rest" in
+        *$'\n'*)
+          line="${rest%%$'\n'*}"
+          rest="${rest#*$'\n'}"
+          ;;
+        *)
+          line="$rest"
+          rest=""
+          ;;
+      esac
+      progress_handle_line "$line" "$label" "$log" "$done" "$total"
+    done
+  done
+  return 0
+}
+
+# git_run_progress <标签> <已完成数> <总数> <git 命令...>
+# 终端：解析 --progress，画一条总进度。非终端：原样执行，git 自己往 stderr 打百分比。
+git_run_progress() {
+  local label="$1" done="$2" total="$3"
+  shift 3
+  local log git_rc=0
+
+  if ! progress_active; then
+    "$@"
+    return $?
+  fi
+
+  log=$(mktemp) || return 1
+  # 管道放进子 shell并关闭 errexit，确保能立即取得 git 的 PIPESTATUS[0]；
+  # 不修改调用方的 trap 或 shell 选项，临时日志在管道返回后统一清理。
+  git_rc=$(
+    set +e
+    "$@" 2>&1 | progress_consume "$label" "$log" "$done" "$total"
+    printf '%s' "${PIPESTATUS[0]}"
+  )
+  progress_end
+  if [ "$git_rc" -ne 0 ] && [ -s "$log" ]; then
+    cat "$log" >&2
+  fi
+  rm -f -- "$log"
+  return "$git_rc"
+}

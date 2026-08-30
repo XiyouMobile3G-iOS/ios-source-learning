@@ -102,5 +102,38 @@ source_local_state() {
   return 0
 }
 
+# source_needs_clone <目录名> —— 目录不存在，bootstrap 应当 git clone
+# 已是仓库或被占用都不下（占用交给 inspect_local 报冲突）。
+source_needs_clone() {
+  source_local_state "$1"
+  [ $? -eq 1 ]
+}
+
+# source_has_repo <目录名> —— 本地已是 git 仓库，update-sources 可以 fetch
+source_has_repo() {
+  source_local_state "$1"
+  [ $? -eq 0 ]
+}
+
+# source_redact_url <url> —— 日志里去掉 userinfo 和常见 query/fragment 凭据，避免 token 进终端
+source_redact_url() {
+  printf '%s' "$1" \
+    | sed -E \
+        -e 's#([[:alpha:]][[:alnum:]+.-]*://)[^/@[:space:]]+@#\1#' \
+        -e 's#([?&#][^=&#[:space:]]*(access|auth|credential|key|password|passwd|secret|sig|signature|token)[^=&#[:space:]]*=)[^&#[:space:]]*#\1REDACTED#gI'
+}
+
+# source_count <谓词> <目标名...>
+# 对每个目标 lookup 后对 SRC_DIR 调谓词（source_needs_clone / source_has_repo）。
+source_count() {
+  local pred="$1" n=0 key
+  shift
+  for key in "$@"; do
+    source_lookup "$key" || continue
+    "$pred" "$SRC_DIR" && n=$((n + 1))
+  done
+  printf '%s' "$n"
+}
+
 # 供上面几个函数定位工作区；三个脚本 source 本文件前已设好各自的 ROOT
 SOURCES_ROOT="${SOURCES_ROOT:-${ROOT:-.}}"
