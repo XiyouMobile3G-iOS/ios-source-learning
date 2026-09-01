@@ -1,11 +1,11 @@
 # iOS Source Learning
 
 > 🤖 **给 AI Agent 用的 iOS 源码导航层**
-> 62 个手写地图 + 版本锁定 + 行为规范，让 AI 精确回答 iOS 底层问题
+> 31 份手写源码地图 + 版本锁定 + 行为规范，让 AI 精确回答 iOS 底层问题
 
 <div align="center">
 
-[![Maps](https://img.shields.io/badge/Source_Maps-62-blue.svg)](maps/)
+[![Maps](https://img.shields.io/badge/Source_Maps-31-blue.svg)](maps/)
 [![Pinned Versions](https://img.shields.io/badge/Versions-Pinned-green.svg)](#版本覆盖)
 [![License](https://img.shields.io/badge/License-Mixed-orange.svg)](#许可证)
 
@@ -22,21 +22,23 @@
 
 ### 解决方案
 - ✅ **强制版本验证**：通过 `AGENTS.md` 规范，AI 必须先检查版本再回答
-- ✅ **精确行号导航**：62 个手写地图预先标注关键符号和行号
+- ✅ **精确行号导航**：31 份手写地图预先标注关键符号和行号
 - ✅ **一键环境复现**：`bootstrap.sh` 自动下载并锁定所有源码版本
 
 ---
 
 ## 📦 三大核心资产
 
-### 📍 62 个源码地图
-手写的导航索引，覆盖：
+### 📍 31 份源码地图
+每份地图的正文在 `AGENTS.md`；相同位置的 `CLAUDE.md` 是给 Claude Code 的入口文件，
+不重复存放地图内容。两类文件共 62 个，源码地图的统计口径始终是 31 份。
 
 | 类别 | 覆盖范围 | 地图数量 |
 |------|---------|---------|
-| **Apple 底层** | objc4 (runtime, isa, msgSend, cache_t, ARC)<br>CoreFoundation (RunLoop, CFString)<br>libdispatch (GCD, Queue, Semaphore)<br>swift-foundation (Swift 重写的 Foundation) | ~40 个 |
-| **参考实现** | gnustep-base (NSNotificationCenter, KVO) | ~8 个 |
-| **三方库** | AFNetworking 4.x, JSONModel, YYModel, SDWebImage 5.x | ~14 个 |
+| **Apple 底层** | objc4 (runtime, isa, msgSend, cache_t, ARC)<br>CoreFoundation (RunLoop, CFString)<br>libdispatch (GCD, Queue, Semaphore)<br>Swift Foundation | 12 份 |
+| **参考实现** | gnustep-base (NSNotificationCenter, KVO) | 1 份 |
+| **三方库** | AFNetworking 4.x, JSONModel, YYModel, SDWebImage 5.x | 18 份 |
+| **合计** | 以上所有正文地图 | **31 份** |
 
 地图格式示例：
 ```markdown
@@ -75,21 +77,21 @@ cd ios-source-learning
 > **"RunLoop 没有 source/timer 的时候为什么不会退出？"**
 
 AI 会自动：
-1. 读取 `maps/CF-1153.18-apple/CFRunLoop.md`
+1. 读取 `maps/CF-1153.18-apple/AGENTS.md`
 2. 定位到 `__CFRunLoopRun()` 的关键行号
 3. 结合源码给出精确解释
 
 > **"objc_msgSend 的缓存查找逻辑是怎样的？"**
 
 AI 会：
-1. 检查 `maps/objc4-951.7-apple/objc-cache.md`
+1. 检查 `maps/new objc4/runtime/AGENTS.md`
 2. 找到 `cache_fill_nolock()` 的实现位置
 3. 解释缓存的插入和查找机制
 
 ### Step 3: 验证和探索
 ```bash
 # 所有源码都下载到项目根目录（已加入 .gitignore）
-cd objc4-951.7-apple/runtime
+cd 'new objc4/runtime'
 # 直接查看 AI 引用的代码行
 ```
 
@@ -119,7 +121,7 @@ graph LR
 
 ### 版本锁定策略
 - **钉死标签**（第三方库）：`AFNetworking@4.0.1`，只报告更新不自动升级
-- **跟踪分支**（Swift 源码）：`release/6.0` 分支，仅 fast-forward 合并
+- **跟踪分支**（Swift 源码等）：追踪 `sources.sh` 指定的分支，仅 fast-forward 合并
 - **最新标签**（部分 Apple 库）：自动切换到最新 tag
 
 </details>
@@ -128,24 +130,43 @@ graph LR
 
 ## 📌 版本覆盖
 
-| 仓库 | 锁定版本 | 更新策略 | 地图数量 |
+| 仓库 | 当前 ref | 更新策略 | 地图数量 |
 |------|---------|---------|---------|
-| **objc4-apple** | `objc4-951.7` | 钉死标签 | 6 |
-| **CF-apple** | `CF-1153.18` | 钉死标签 | 8 |
-| **libdispatch-apple** | 最新 tag | 自动跟踪 | 6 |
-| **swift-corelibs-foundation** | `release/6.0` 分支 | 跟踪分支 | 4 |
-| **swift-foundation** | `release/6.0` 分支 | 跟踪分支 | 4 |
-| **gnustep-base** | `base-1_31_0` | 钉死标签 | 8 |
+| **objc4-apple** | `objc4-951.7` | 钉死标签 | 7 |
+| **CF-apple** | `main`（停在 `CF-1153.18`） | 跟踪分支 | 1 |
+| **libdispatch-apple** | 版本号最高的 tag | 自动跟踪 | 1 |
+| **swift-corelibs-libdispatch** | `main` | 跟踪分支 | 1 |
+| **swift-corelibs-foundation** | `main` | 跟踪分支 | 1 |
+| **swift-foundation** | `main` | 跟踪分支 | 1 |
+| **gnustep-base** | `base-1_31_1` | 钉死标签 | 1 |
 | **AFNetworking** | `4.0.1` | 钉死标签 | 4 |
-| **JSONModel** | `1.8.0` | 钉死标签 | 3 |
+| **JSONModel** | `1.8.0` | 钉死标签 | 5 |
 | **YYModel** | `1.0.4` | 钉死标签 | 3 |
-| **SDWebImage** | `5.21.7` | 钉死标签 | 4 |
+| **SDWebImage** | `5.21.7` | 钉死标签 | 6 |
+| **合计** |  |  | **31** |
 
 检查更新：
 ```bash
 ./check-updates.sh -v  # 检查所有仓库的更新状态（只读，6 小时缓存）
 ./update-sources.sh    # 执行安全更新
 ```
+
+### 更新约定
+
+先运行 `./check-updates.sh`，再决定是否执行更新。退出码是给 agent 与自动化判断用的：
+
+| 退出码 | 输出开头 | 含义与下一步 |
+|--------|---------|--------------|
+| 0 | `UPTODATE` | 直接读源码，不要运行 `update-sources.sh` |
+| 10 | `UPDATE` | 运行 `./update-sources.sh` 后再读源码 |
+| 2 | `ERROR` | 检查失败；若网络权限允许则用相同参数重试一次，仍失败时须声明基于本地版本作答 |
+
+`NOTICE` 表示有版本可人工处理，但**不改变退出码**：objc4、gnustep-base 与四份第三方库钉在 tag，
+`update-sources.sh` 对它们只 fetch 并报告，绝不自动切换 ref，以免地图行号失效。
+
+其余策略由 `sources.sh` 统一定义：`track` 目标仅以 `merge --ff-only` 追踪配置分支，
+若本地当前分支与清单不符，`check-updates.sh` 会返回 `ERROR`，`update-sources.sh` 会跳过该目标；
+`latest` 目标会切到版本号最高的 tag。不要手动用 `git fetch`、`git pull` 或 `git checkout` 绕过脚本。
 
 ---
 
@@ -165,10 +186,12 @@ graph LR
 - 超过 200 行的单个地图
 
 ### 提交流程
-1. Fork 本仓库
-2. 在 `maps/` 下创建新地图
-3. 在 `sources.sh` 中声明版本锁定
-4. 提交 PR 并说明覆盖的模块
+1. Fork 本仓库并创建分支。
+2. 新地图必须先写在 `maps/` 对应位置，再运行 `./bootstrap.sh --maps-only` 挂载；直接在下载的源码目录新建文件会成为游离文件，其他人 clone 不到。
+3. 地图正文一律写入 `AGENTS.md`，同目录 `CLAUDE.md` 只保留三行指针；仓库根目录例外，根 `CLAUDE.md` 必须是指向根 `AGENTS.md` 的符号链接，避免自动加载时丢失规范。
+4. 新增上游源码时，在 `sources.sh` 添加版本与策略，并确认源码目录被 `.gitignore` 忽略；不要改三个脚本中重复的清单。
+5. 源码升版时，同时修改 `sources.sh` 的 ref 并校对所有受影响地图的行号；钉死版本的仓库不能只升级源码不改地图。
+6. 提交 PR，说明覆盖模块、版本与验证方式。
 
 ---
 
