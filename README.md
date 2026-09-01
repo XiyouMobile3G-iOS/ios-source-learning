@@ -6,8 +6,8 @@
 <div align="center">
 
 [![Maps](https://img.shields.io/badge/Source_Maps-31-blue.svg)](maps/)
-[![Pinned Versions](https://img.shields.io/badge/Versions-Pinned-green.svg)](#版本覆盖)
-[![License](https://img.shields.io/badge/License-Mixed-orange.svg)](#许可证)
+[![Pinned Versions](https://img.shields.io/badge/Versions-Pinned-green.svg)](#version-coverage)
+[![License](https://img.shields.io/badge/License-Mixed-orange.svg)](#license)
 
 </div>
 
@@ -134,7 +134,11 @@ graph LR
 
 ---
 
+<a id="version-coverage"></a>
+
 ## 📌 版本覆盖
+
+`libdispatch` 目标对应上游 `swift-corelibs-libdispatch`，在下表中单列，避免与 Apple drop 混淆。
 
 | 仓库 | 当前 ref | 更新策略 | 地图数量 |
 |------|---------|---------|---------|
@@ -203,6 +207,8 @@ graph LR
 6. 提交 PR，说明覆盖模块、版本与验证方式。
 
 ---
+
+<a id="license"></a>
 
 ## 📄 许可证
 
