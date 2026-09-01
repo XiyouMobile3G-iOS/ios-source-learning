@@ -48,8 +48,10 @@ setup_ws() {
   REMOTE=$(mktemp -d)
   SEED=$(mktemp -d)
 
-  git init --bare -q -b main "$REMOTE"
-  git -C "$SEED" init -q -b main
+  git init --bare -q "$REMOTE"
+  git --git-dir="$REMOTE" symbolic-ref HEAD refs/heads/main
+  git -C "$SEED" init -q
+  git -C "$SEED" symbolic-ref HEAD refs/heads/main
   git -C "$SEED" config user.email test@example.com
   git -C "$SEED" config user.name test
   printf 'seed\n' > "$SEED/file"
@@ -66,12 +68,23 @@ setup_ws() {
   git -C "$WS/fixture" checkout -q -B feature origin/feature
 
   cp "$ROOT/check-updates.sh" "$ROOT/update-sources.sh" "$ROOT/progress.sh" "$WS/"
+  # 从真实 source_lookup 起截查询函数，不绑装饰性注释。截空则立刻失败。
+  helpers="$(awk '/^source_lookup\(\)/ { p=1 } p' "$ROOT/sources.sh")"
+  case "$helpers" in
+    *'source_lookup()'*'source_all_keys()'*'SOURCES_ROOT='*) ;;
+    *)
+      printf '未能从 sources.sh 截取查询函数（需要 source_lookup / source_all_keys / SOURCES_ROOT）\n' >&2
+      exit 1
+      ;;
+  esac
   {
     printf 'SOURCES=(\n'
     printf '  "fixture|fixture|Fixture|%s|track|main|"\n' "$REMOTE"
     printf ')\n'
-    awk '/^# ── 查询/{p=1} p' "$ROOT/sources.sh"
+    printf '%s\n' "$helpers"
   } > "$WS/sources.sh"
+  grep -q '^SOURCES=(' "$WS/sources.sh" || { printf 'fixture sources.sh 缺少 SOURCES 数组\n' >&2; exit 1; }
+  grep -q '^)' "$WS/sources.sh" || { printf 'fixture sources.sh 的 SOURCES 数组未闭合\n' >&2; exit 1; }
   chmod +x "$WS/check-updates.sh" "$WS/update-sources.sh"
 }
 
