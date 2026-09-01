@@ -1,7 +1,7 @@
 # iOS Source Learning
 
 > 🤖 **给 AI Agent 用的 iOS 源码导航层**
-> 31 份手写源码地图 + 版本锁定 + 行为规范，让 AI 精确回答 iOS 底层问题
+> 31 份手写源码地图（另有 31 个 Claude 入口文件）+ 版本锁定 + 行为规范，让 AI 精确回答 iOS 底层问题
 
 <div align="center">
 
@@ -93,6 +93,12 @@ AI 会：
 # 所有源码都下载到项目根目录（已加入 .gitignore）
 cd 'new objc4/runtime'
 # 直接查看 AI 引用的代码行
+```
+
+新增或修改地图后，先在 `maps/` 中完成编辑，再运行下面的命令重新挂载入口文件：
+
+```bash
+./bootstrap.sh --maps-only
 ```
 
 ---
