@@ -253,7 +253,7 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 | `libdispatch` / `foundation` / `swift-foundation` / `cf` | `merge --ff-only` | 干净的 tracking 分支 |
 | `libdispatch-apple` | 自动 checkout 到版本号最高的 tag | drop 代码在 tag 上，`main` 常落后 |
 
-安全约束：工作区脏默认跳过（`-f` 才 stash）、本地领先上游判为分叉只报告、只用 `--ff-only`、fetch 失败自动重试 3 次。两个脚本都接受目标名收窄范围（`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `swift-foundation` / `cf` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage`），`-h` 看完整用法。
+安全约束：工作区脏默认跳过（`-f` 才 stash）、本地领先上游判为分叉只报告、只用 `--ff-only`、fetch 失败自动重试 3 次。`track` 策略（`libdispatch` / `foundation` / `swift-foundation` / `cf`）还会核对本地当前分支与 `sources.sh` 里配置的 ref：分支不符时 `check-updates.sh` 报 ERROR（退出码 2），`update-sources.sh` 跳过该目标且不 fetch（`-n`/`-f` 不旁路）。两个脚本都接受目标名收窄范围（`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `swift-foundation` / `cf` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage`），`-h` 看完整用法。
 
 > 升级源码后行号会变，**地图里的行号需要同步校对**——这是 objc4 采取"只报告不自动切"策略的原因。
 

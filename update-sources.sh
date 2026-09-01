@@ -72,8 +72,9 @@ usage() {
 #   fetch-only    只 fetch 并报告有无新 tag，永不动工作区（用于 objc4、gnustep 与三份第三方库）
 #   latest-tag    fetch 后自动 checkout 到版本号最高的 tag（用于 Apple drop 仓库）
 # $4 tag 过滤 glob（可空）：只在 fetch-only / latest-tag 下用，见 sources.sh
+# $5 清单指定的 ref（可空）：pull 模式下校验当前分支，不符则不 fetch
 update_git_repo() {
-  local dir="$ROOT/$1" name="$2" mode="${3:-pull}" tagglob="${4:-}"
+  local dir="$ROOT/$1" name="$2" mode="${3:-pull}" tagglob="${4:-}" ref="${5:-}"
 
   if [ ! -d "${dir}/.git" ]; then
     err "${name}: $1 不是 git 仓库，跳过"
@@ -87,6 +88,17 @@ update_git_repo() {
   dirty="$(git -C "${dir}" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
 
   info "分支 ${branch} @ ${before}，未提交改动 ${dirty} 处"
+
+  # 清单指定了 ref 时以 ref 为准：本地误切到别的分支就直接停下，
+  # 不 fetch 不合并——更新错误分支会让地图行号对不上源码。
+  if [ "${mode}" = "pull" ] && [ -n "${ref}" ] && [ "${branch}" != "${ref}" ]; then
+    local branch_disp="$branch"
+    [ "$branch_disp" = "HEAD" ] && branch_disp="游离 HEAD"
+    err "${name}: 配置要求分支 ${ref}，当前在 ${branch_disp}，请先切回再更新（git -C \"${dir}\" checkout ${ref}）"
+    note "  ${name}  ${C_YELLOW}分支不符${C_RESET}（${branch_disp} ≠ ${ref}）"
+    FETCH_DONE=$((FETCH_DONE + 1))
+    return
+  fi
 
   local attempt=1 fetched=0
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -287,7 +299,7 @@ for key in "${ALL_TARGETS[@]}"; do
     continue
   fi
 
-  update_git_repo "$SRC_DIR" "$SRC_NAME" "$mode" "$SRC_TAGGLOB"
+  update_git_repo "$SRC_DIR" "$SRC_NAME" "$mode" "$SRC_TAGGLOB" "$SRC_REF"
 done
 
 # 本次动过的目标，其 check-updates.sh 缓存作废；没动过的保留，

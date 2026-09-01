@@ -66,9 +66,10 @@ AFNetworking / JSONModel / YYModel / SDWebImage，无论看起来多简单：
 |---|---|---|
 | 0 | `UPTODATE` | 直接读源码，**不要**跑 update-sources.sh |
 | 10 | `UPDATE` | 跑 `./update-sources.sh` 再读 |
-| 2 | `ERROR` | 先申请网络权限，用完全相同的参数重跑一次 `check-updates.sh`；重跑仍返回 2 才视为「未能更新」 |
+| 2 | `ERROR` | 先申请网络权限，用完全相同的参数重跑一次 `check-updates.sh`；重跑仍返回 2 才视为「未能更新」。明细是「配置要求分支…请先切回」时不是网络问题，转达用户切回分支 |
 
 首次检查返回退出码 2 时，可能只是 agent 沙箱无法访问网络或本机代理。agent **必须申请沙箱外网络权限后重跑一次同一条 `check-updates.sh` 命令**，不得改用手动 `git fetch`、`git pull` 或 `git ls-remote` 绕过脚本。只有获得网络权限后的重跑仍返回 2，才声明基于本地版本作答。
+例外：ERROR 明细是「配置要求分支 X，当前在 Y，请先切回 X」（track 目标本地所在分支与 `sources.sh` 的 ref 不符）时，与网络无关——把提示原样转达用户、请其切回配置分支，**不要**重试，也**不要**自行 checkout（与「规范零」一致）。`update-sources.sh` 对同一情况会跳过该目标（退出码仍 0），需读输出/摘要，不能只看退出码。
 
 两个脚本都接受目标名收窄范围：`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` /
 `swift-foundation` / `cf` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage`，
@@ -281,7 +282,7 @@ RunLoop 和自动释放池 Apple 侧有权威源码（`CF-1153.18-apple/` 与 `n
 - 仓库里混着非版本号的历史 tag 时，清单末尾的 **tag 过滤 glob** 必须填（`gnustep` 填的是 `base-*`），
   否则 `sort -V` 会把 `start-cvs` 这类排到最高，每轮检查都报一条永远消不掉的假「有新版本」。
 
-安全约束：工作区脏默认跳过（`-f` 才 stash）；本地领先上游判为分叉只报告；只用 `--ff-only`。fetch 失败自动重试 3 次。
+安全约束：工作区脏默认跳过（`-f` 才 stash）；本地领先上游判为分叉只报告；只用 `--ff-only`。fetch 失败自动重试 3 次。`track` 策略还会核对本地当前分支与 `sources.sh` 的 ref，不符则不 fetch、不合并。
 
 CF 的仓库是 `apple-oss-distributions/CF`，`main` 停在 `CF-1153.18`（2021 年最后一次 push），实际不会再有更新；留着 git 主要是为了能 `git diff CF-1151.16 CF-1153.18` 对照历史版本。
 
