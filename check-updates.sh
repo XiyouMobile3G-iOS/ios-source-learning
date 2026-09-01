@@ -269,17 +269,19 @@ done
 
 BODY=""
 CODE=0
-if [ -n "$UPDATES" ]; then
-  BODY="UPDATE 有更新，请运行 ./update-sources.sh"$'\n'"$UPDATES"
-  CODE=10
-elif [ -n "$ERRORS" ]; then
+if [ -n "$ERRORS" ]; then
   BODY="ERROR 检查失败，按「未能更新、基于本地版本」处理"$'\n'
   CODE=2
+elif [ -n "$UPDATES" ]; then
+  BODY="UPDATE 有更新，请运行 ./update-sources.sh"$'\n'"$UPDATES"
+  CODE=10
 else
   BODY="UPTODATE 全部最新，无需运行 update-sources.sh"$'\n'
   CODE=0
 fi
 [ -n "$ERRORS" ] && BODY="${BODY}${ERRORS}"
+# 即使错误优先决定退出码，也保留已成功探测到的更新，方便用户下一步处理。
+[ -n "$ERRORS" ] && [ -n "$UPDATES" ] && BODY="${BODY}UPDATE 同时发现以下更新（修复检查错误后再执行 update-sources.sh）"$'\n'"$UPDATES"
 # notice 一定要显示（它要人工处理），但不改变退出码，不驱使 agent 跑 update-sources.sh
 [ -n "$NOTICES" ] && BODY="${BODY}NOTICE 以下需人工处理，跑 update-sources.sh 也不会变"$'\n'"${NOTICES}"
 [ "$VERBOSE" -eq 1 ] && [ -n "$OKS" ] && BODY="${BODY}${OKS}"
