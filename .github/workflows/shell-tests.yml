@@ -1,0 +1,22 @@
+name: Shell Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shell-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: bash -n bootstrap.sh check-updates.sh update-sources.sh progress.sh tests/*.sh
+      - name: Run regression tests
+        run: |
+          ./tests/progress.test.sh
+          ./tests/track-ref.test.sh
+          ./tests/check-updates-status.test.sh
