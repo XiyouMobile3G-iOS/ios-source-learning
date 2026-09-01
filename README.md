@@ -140,7 +140,7 @@ graph LR
 |------|---------|---------|---------|
 | **objc4-apple** | `objc4-951.7` | 钉死标签 | 7 |
 | **CF-apple** | `main`（停在 `CF-1153.18`） | 跟踪分支 | 1 |
-| **libdispatch-apple** | 版本号最高的 tag | 自动跟踪 | 1 |
+| **libdispatch-apple** | 版本号最高的 tag | `latest`，自动切换 | 1 |
 | **swift-corelibs-libdispatch** | `main` | 跟踪分支 | 1 |
 | **swift-corelibs-foundation** | `main` | 跟踪分支 | 1 |
 | **swift-foundation** | `main` | 跟踪分支 | 1 |
