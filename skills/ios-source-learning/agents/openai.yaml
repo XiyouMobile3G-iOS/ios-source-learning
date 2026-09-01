@@ -1,0 +1,4 @@
+interface:
+  display_name: "iOS Source Learning"
+  short_description: "Answer iOS internals questions from version-pinned source maps"
+  default_prompt: "Use the ios-source-learning workspace to answer this iOS internals question with versioned source citations."

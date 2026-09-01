@@ -21,6 +21,12 @@
 
 配合 Claude Code、Codex 等能读 `AGENTS.md` 的 agent 使用：**clone → bootstrap → 直接提问**，它会自己找到该读哪个文件的哪一段。
 
+### Codex Skill
+
+仓库也包含可安装的 Codex Skill：[`skills/ios-source-learning/SKILL.md`](./skills/ios-source-learning/SKILL.md)。
+它把「先核对版本、再按地图定位、最后用源码与行号作答」封装为通用入口；源码地图、版本清单与脚本规则仍以本仓库根目录的
+`AGENTS.md`、`maps/`、`sources.sh` 为准。使用该 Skill 时，尚未准备本工作区的用户会先收到 bootstrap 的体量提示，不会被静默下载源码。
+
 ---
 
 ## 快速开始
