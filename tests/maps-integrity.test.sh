@@ -66,8 +66,9 @@ while IFS= read -r map; do
 done <<EOF
 $(git -C "$ROOT" ls-files 'maps/**/AGENTS.md')
 EOF
+claude_count="$(git -C "$ROOT" ls-files 'maps/**/CLAUDE.md' | wc -l | tr -d ' ')"
+assert_eq "$map_count" "$claude_count" "每份地图正文都有对应入口"
 
-assert_eq "$map_count" "31" "地图正文数量"
 
 printf '\n教学提示词路由\n'
 assert_file "$ROOT/prompts/teaching/INDEX.md" '教学提示词索引存在'
