@@ -86,7 +86,7 @@ Mutex<[String?               /* Notification name，nil = 通配 */
 | `AsyncMessage+AsyncSequence.swift` | 201 | `messages(of:)` 三个重载 `34`/`48`/`62`；迭代器 `90`，`next()` `184` |
 | `ActorQueueManager.swift` | 101 | `_NotificationCenterActorQueueManager` `24`，`enqueue` `90` |
 
-`AsyncMessage.swift:117` / `:125` 的 `makeMessage` / `makeNotification` 是
+`NotificationCenter/AsyncMessage.swift:117` / `:125` 的 `makeMessage` / `makeNotification` 是
 **新旧两套 API 互通的唯一桥**：老的字符串通知能被类型化 observer 收到，就靠这两个。
 
 配套：`Sources/FoundationEssentials/Locale/Locale_Notifications.swift`。
