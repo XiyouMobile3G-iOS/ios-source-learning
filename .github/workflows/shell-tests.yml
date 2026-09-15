@@ -20,3 +20,5 @@ jobs:
           ./tests/progress.test.sh
           ./tests/track-ref.test.sh
           ./tests/check-updates-status.test.sh
+      - name: Check map integrity
+        run: ./tests/maps-integrity.test.sh
