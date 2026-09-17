@@ -5,6 +5,7 @@
 /swift-corelibs-foundation/
 /swift-foundation/
 /CF-1153.18-apple/
+/dyld/
 
 # GNUstep base（OpenStep 的开源重实现，Foundation 的参照实现，非 Apple 代码）
 /gnustep-base/

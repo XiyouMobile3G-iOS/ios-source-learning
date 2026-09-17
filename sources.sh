@@ -36,6 +36,7 @@
 SOURCES=(
   "objc4|new objc4|objc4|https://github.com/apple-oss-distributions/objc4.git|pinned|objc4-951.7|"
   "libdispatch|libdispatch|libdispatch|https://github.com/apple/swift-corelibs-libdispatch.git|track|main|--filter=blob:none"
+  "dyld|dyld|dyld|https://github.com/apple-oss-distributions/dyld.git|pinned|dyld-1378|--filter=blob:none|"
   "libdispatch-apple|libdispatch-apple|libdispatch-apple|https://github.com/apple-oss-distributions/libdispatch.git|latest||"
   "foundation|swift-corelibs-foundation|corelibs-foundation|https://github.com/apple/swift-corelibs-foundation.git|track|main|--filter=blob:none"
   "swift-foundation|swift-foundation|swift-foundation|https://github.com/apple/swift-foundation.git|track|main|--filter=blob:none"
