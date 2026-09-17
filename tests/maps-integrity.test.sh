@@ -62,6 +62,40 @@ while IFS= read -r map; do
   else
     fail "$directory/CLAUDE.md 没有指向 AGENTS.md"
   fi
+  map_links_ok=1
+  links="$(
+    grep -Eo '\]\((\./|\.\./)[^)]*AGENTS\.md(#[^)]*)?\)' "$ROOT/$map" 2>/dev/null \
+      | sed -E 's/^\]\(//; s/\)$//; s/#.*$//' \
+      || true
+  )"
+  while IFS= read -r target; do
+    [ -n "$target" ] || continue
+    target_dir="$(dirname "$ROOT/$map")/$(dirname "$target")"
+    if [ ! -d "$target_dir" ]; then
+      fail "$map 的地图链接目录不存在: $target"
+      map_links_ok=0
+      continue
+    fi
+    target_path="$(cd "$target_dir" && pwd)/$(basename "$target")"
+    case "$target_path" in
+      "$ROOT"/maps/*) ;;
+      *)
+        fail "$map 的地图链接越出 maps/: $target"
+        map_links_ok=0
+        continue
+        ;;
+    esac
+    tracked_path="${target_path#"$ROOT"/}"
+    if ! git -C "$ROOT" ls-files --error-unmatch "$tracked_path" >/dev/null 2>&1; then
+      fail "$map 的地图链接目标未受版本控制: $target"
+      map_links_ok=0
+    fi
+  done <<EOF
+$links
+EOF
+  if [ "$map_links_ok" -eq 1 ]; then
+    ok "$map 内部地图链接有效"
+  fi
 
 done <<EOF
 $(git -C "$ROOT" ls-files 'maps/**/AGENTS.md')
