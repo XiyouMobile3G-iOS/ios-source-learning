@@ -11,7 +11,7 @@
 
 本目录是三类源码的研究区：
 
-- **Apple 底层**：objc runtime / CoreFoundation（RunLoop）/ libdispatch（GCD）/ Foundation（两份：外壳 + 实现体）
+- **Apple 底层**：objc runtime / dyld（Mach-O 装载、rebase / bind / chained fixups）/ CoreFoundation（RunLoop）/ libdispatch（GCD）/ Foundation（两份：外壳 + 实现体）
 - **参照实现**：`gnustep-base/`——Apple 从未开源 Foundation 的 ObjC 实现，`NSNotificationCenter`、KVO 只能看它（**非 Apple 代码**，引用须注明）
 - **常用第三方库**（全在 `third-party/` 一个文件夹里）：AFNetworking / JSONModel / YYModel / SDWebImage
 
@@ -21,7 +21,7 @@
 
 ## 规范零：先确认工作区已搭好
 
-本仓库**不包含任何源码本体**，六份 Apple 源码 + 一份参照实现 + 四份第三方库都由 `bootstrap.sh` 从各自上游克隆。
+本仓库**不包含任何源码本体**，七份 Apple 源码 + 一份参照实现 + 四份第三方库都由 `bootstrap.sh` 从各自上游克隆。
 新克隆的仓库里，下表所有子目录都还不存在，本文件后面的链接也就全是死链。
 
 动手前先跑一次体检（它会逐个核对本地有没有、版本对不对，且不改动任何东西）：
@@ -38,9 +38,9 @@
 ./bootstrap.sh swift-foundation gnustep             # 只补通知中心相关的两份（约 40 MB）
 ```
 
-会被下载到工作区的十一个目录：
+会被下载到工作区的十二个目录：
 
-- **Apple 底层六份**：`new objc4/` `CF-1153.18-apple/` `libdispatch-apple/` `libdispatch/`
+- **Apple 底层七份**：`new objc4/` `dyld/` `CF-1153.18-apple/` `libdispatch-apple/` `libdispatch/`
   `swift-corelibs-foundation/` `swift-foundation/`
 - **参照实现一份**：`gnustep-base/`（**非 Apple 代码**，补 Apple 从未开源的 Foundation ObjC
   实现，主要是 `NSNotificationCenter` 与 KVO；约 12 MB，可单独补：`./bootstrap.sh gnustep`）
@@ -53,8 +53,8 @@
 
 ## 规范一：先更新源码，再回答
 
-只要问题涉及 objc runtime / RunLoop / CoreFoundation / GCD / Foundation / 通知中心 / KVO /
-AFNetworking / JSONModel / YYModel / SDWebImage，无论看起来多简单：
+只要问题涉及 objc runtime / dyld / Mach-O 装载 / rebase / bind / chained fixups / RunLoop / CoreFoundation / GCD /
+Foundation / 通知中心 / KVO / AFNetworking / JSONModel / YYModel / SDWebImage，无论看起来多简单：
 
 1. 先运行 `./check-updates.sh`，**按退出码决定下一步**；
 2. 再 grep / 读实际源码得结论；
@@ -71,11 +71,11 @@ AFNetworking / JSONModel / YYModel / SDWebImage，无论看起来多简单：
 首次检查返回退出码 2 时，可能只是 agent 沙箱无法访问网络或本机代理。agent **必须申请沙箱外网络权限后重跑一次同一条 `check-updates.sh` 命令**，不得改用手动 `git fetch`、`git pull` 或 `git ls-remote` 绕过脚本。只有获得网络权限后的重跑仍返回 2，才声明基于本地版本作答。
 例外：ERROR 明细是「配置要求分支 X，当前在 Y，请先切回 X」（track 目标本地所在分支与 `sources.sh` 的 ref 不符）时，与网络无关——把提示原样转达用户、请其切回配置分支，**不要**重试，也**不要**自行 checkout（与「规范零」一致）。`update-sources.sh` 对同一情况会跳过该目标（退出码仍 0），需读输出/摘要，不能只看退出码。
 
-两个脚本都接受目标名收窄范围：`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` /
+两个脚本都接受目标名收窄范围：`objc4` / `dyld` / `libdispatch` / `libdispatch-apple` / `foundation` /
 `swift-foundation` / `cf` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage`，
-如 `./check-updates.sh sdwebimage`。其余参数见脚本 `-h`。
+如 `./check-updates.sh dyld`。其余参数见脚本 `-h`。
 
-四份第三方库与 `gnustep` 钉在具体 release tag 上（地图行号按该 tag 写），策略同 objc4：**有新版本只出 `NOTICE`、不改工作区**，
+`dyld`、四份第三方库与 `gnustep` 钉在具体 release tag 上（地图行号按该 tag 写），策略同 objc4：**有新版本只出 `NOTICE`、不改工作区**，
 不要因为看到 NOTICE 就去跑 `update-sources.sh`，也不要自行 `git checkout` 升版——升版会让地图里全部行号失效。
 
 **禁止凭记忆回答。** CF 停更在 10.13、两份 CF 有差异、libdispatch 有两套、objc4 每 drop 都在变、
@@ -135,6 +135,7 @@ Foundation 被拆成 corelibs 外壳 + swift-foundation 实现体——凭印象
 | Foundation 核心实现 / `NotificationCenter` 现在怎么存与分发 / Calendar / URL / JSON | [`swift-foundation/AGENTS.md`](./swift-foundation/AGENTS.md) | corelibs 的实现体，**追 main，行号会漂** |
 | **通知中心**（observer 表 / post 分发 / 通知队列）、**KVO 动态子类** | [`gnustep-base/AGENTS.md`](./gnustep-base/AGENTS.md) | **非 Apple 代码**，但 Apple 侧这两块一行源码都没有 |
 | 类实现化 / category / ivar / isa / 引用计数 / msgSend | [`new objc4/AGENTS.md`](./new%20objc4/AGENTS.md) | 索引，含 6 份子模块地图 |
+| dyld / Mach-O 装载 / rebase / bind / export trie / shared cache / launch closure / chained fixups | [`dyld/AGENTS.md`](./dyld/AGENTS.md) | Apple dyld 源码；地图基准 `dyld-1378`，行号按此 tag 写 |
 | 自动释放池、RunLoop 与 GCD 主队列的咬合 | 本文「跨仓库交叉点」一节 | 跨仓库，留在这里 |
 | AFNetworking：session 封装 / 序列化 / SSL Pinning / task swizzle / 图片下载 | [`third-party/AFNetworking/AGENTS.md`](./third-party/AFNetworking/AGENTS.md) | 4.0.1，**只有 NSURLSession 一条路径**。索引，含 4 个模块 |
 | JSONModel：属性内省 / JSON↔Model 映射 / 类型转换 | [`third-party/JSONModel/AGENTS.md`](./third-party/JSONModel/AGENTS.md) | 1.8.0，objc runtime 的应用样本。索引，含 4 个模块 |
@@ -152,6 +153,7 @@ Foundation 被拆成 corelibs 外壳 + swift-foundation 实现体——凭印象
 |---|---|---|
 | `new objc4/` | ObjC runtime | 分支 `objc4-951.7` |
 | `CF-1153.18-apple/` | CoreFoundation，**RunLoop 权威版** | 分支 `main` @ `CF-1153.18`（macOS 10.13.6，上游已停更） |
+| `dyld/` | Mach-O 装载、符号绑定、共享缓存、launch closure、chained fixups | tag `dyld-1378`（同名本地分支） |
 | `libdispatch-apple/` | GCD，**macOS drop** | tag `libdispatch-1542.100.32`（detached HEAD） |
 | `libdispatch/` | GCD，Swift 开源版 | main |
 | `swift-corelibs-foundation/` | Swift CF + Foundation 的 **ObjC 兼容外壳** | main |
@@ -172,6 +174,7 @@ Foundation 被拆成 corelibs 外壳 + swift-foundation 实现体——凭印象
 
 - CoreFoundation → **`CF-1153.18-apple/`**（不是 swift-corelibs）
 - GCD → **`libdispatch-apple/`**（不是 `libdispatch/`）
+- dyld / Mach-O 装载与 fixups → **`dyld/`**；区分目标 tag 与实测系统版本，不能仅凭源码 tag 推断任一 iOS 发行版的实际实现。
 
 Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真实二进制；差异明细见各自 `AGENTS.md`。
 反过来，查「10.13 之后 CF 怎么演进的」只能看 swift-corelibs——Apple 已停止开源 CF。
@@ -253,12 +256,12 @@ RunLoop 和自动释放池 Apple 侧有权威源码（`CF-1153.18-apple/` 与 `n
 ./update-sources.sh -h                     # 帮助
 ```
 
-目标：`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `swift-foundation` / `cf` /
+目标：`objc4` / `dyld` / `libdispatch` / `libdispatch-apple` / `foundation` / `swift-foundation` / `cf` /
 `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage`。三种策略：
 
 | 目标 | 策略 | 原因 |
 |---|---|---|
-| `objc4`、`gnustep`、`afnetworking`、`jsonmodel`、`yymodel`、`sdwebimage` | 只 fetch，报告有无新版本，**永不动工作区** | 钉在指定 tag，地图行号按该 tag 写 |
+| `objc4`、`dyld`、`gnustep`、`afnetworking`、`jsonmodel`、`yymodel`、`sdwebimage` | 只 fetch，报告有无新版本，**永不动工作区** | 钉在指定 tag，地图行号按该 tag 写 |
 | `libdispatch`、`foundation`、`swift-foundation`、`cf` | `merge --ff-only` | 干净的 tracking 分支 |
 | `libdispatch-apple` | 自动 checkout 到版本号最高的 tag | drop 代码在 tag 上，`main` 常落后 |
 
@@ -290,8 +293,8 @@ CF 的仓库是 `apple-oss-distributions/CF`，`main` 停在 `CF-1153.18`（2021
 
 ## 工作约定
 
-- 十一份源码都是**只读研究**，不追求可构建（objc4 需 internal SDK，CF 是精简包缺文件，gnustep-base 需 gnustep-make + libobjc2；四份第三方库理论上可构建，但本工作区不做这件事）。
-- 十一个源码目录都是独立 git 仓库，不做 submodule，一律 `.gitignore`（第三方库整个 `/third-party/` 被忽略），互不干扰。
+- 十二份源码都是**只读研究**，不追求可构建（objc4 / dyld 需 Apple 内部构建环境，CF 是精简包缺文件，gnustep-base 需 gnustep-make + libobjc2；四份第三方库理论上可构建，但本工作区不做这件事）。
+- 十二个源码目录都是独立 git 仓库，不做 submodule，一律 `.gitignore`（第三方库整个 `/third-party/` 被忽略），互不干扰。
 - **地图的真身在 `maps/`**，源码树里那些 `AGENTS.md` / `CLAUDE.md` 都是指向它的符号链接（`bootstrap.sh` 挂的）。
   就地编辑 `new objc4/runtime/AGENTS.md` 等于编辑 `maps/new objc4/runtime/AGENTS.md`，改动自动进入本仓库的 `git status`——**记得提交**。
 - **正文一律在 `AGENTS.md`，`CLAUDE.md` 只是三行指针**，各地图目录无一例外。读地图直接读 `AGENTS.md`，
@@ -299,7 +302,7 @@ CF 的仓库是 `apple-oss-distributions/CF`，`main` 停在 `CF-1153.18`（2021
 - 这些链接同时写进了各子仓库的 `.git/info/exclude`，不污染子仓库 `git status`，也就不会让更新脚本因「工作区脏」跳过合并。
 - 新增地图时**必须写进 `maps/` 再跑 `./bootstrap.sh --maps-only` 挂载**；直接在源码树里新建文件会成为游离的未跟踪文件，别人 clone 不到。
 - 引用代码带 `文件:行号` + 版本号；三个追 main 的仓库（`libdispatch`、`swift-corelibs-foundation`、
-  `swift-foundation`）会随更新变动，**必须同时记 commit**。`gnustep-base` 钉在 `base-1_31_1`，写 tag 即可。
-  第三方库钉在 tag，引用写成 `AFURLSessionManager.m:210`（AFNetworking 4.0.1）这样即可。
+  `swift-foundation`）会随更新变动，**必须同时记 commit**。`dyld`、`gnustep-base` 与第三方库钉在 tag，引用必须写 tag。
+  第三方库可写成 `AFURLSessionManager.m:210`（AFNetworking 4.0.1）。
 - SDWebImage 的 `Core/` 与 `include/SDWebImage/` 是同一份头文件的两个副本，grep 结果会翻倍，**行号一律引 `Core/`**。
 - 缩进跟随各仓库原有风格（objc4 是 4 空格，与用户全局 OC 的 2 空格规范不同）。

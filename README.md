@@ -2,7 +2,7 @@
 
 给 **AI agent** 用的源码导航层，覆盖三类：
 
-- **Apple 底层**：objc runtime、CoreFoundation（RunLoop）、libdispatch（GCD）、Foundation（外壳 + 实现体两份）
+- **Apple 底层**：objc runtime、dyld（Mach-O 装载与 rebase / bind / chained fixups）、CoreFoundation（RunLoop）、libdispatch（GCD）、Foundation（外壳 + 实现体两份）
 - **参照实现**：GNUstep base——Apple 从未开源 Foundation 的 ObjC 实现，`NSNotificationCenter`、KVO 只能看它
 - **常用第三方库**（都在 `third-party/` 一个文件夹里）：AFNetworking、JSONModel、YYModel、SDWebImage
 
@@ -15,9 +15,9 @@
 
 | 提供什么 | 解决什么问题 |
 |---|---|
-| **一套手写的源码地图**（`maps/`，62 份、按模块划分、含符号与行号） | `CFRunLoop.c` 3955 行、`queue.c` 9085 行，整读会挤爆 agent 上下文；地图让它直接跳到那几十行 |
-| **一套 agent 行为规范**（`AGENTS.md` / `CLAUDE.md`） | 强制"先核对源码版本再回答"，杜绝 LLM 凭记忆编 runtime 细节，或拿 AFNetworking 2.x 的博客结论讲 4.x |
-| **一套版本管理脚本**（`sources.sh` 清单 + `bootstrap.sh` / `check-updates.sh` / `update-sources.sh`） | 十一份源码分别钉在正确的 drop / tag / 分支上，下载前先核对本地、能安全跟进上游更新 |
+| **一套手写的源码地图**（`maps/`，63 份、按模块划分、含符号与行号） | `CFRunLoop.c` 3955 行、`queue.c` 9085 行、dyld 的 `Loader.cpp` 4062 行，整读会挤爆 agent 上下文；地图让它直接跳到那几十行 |
+| **一套 agent 行为规范**（`AGENTS.md` / `CLAUDE.md`） | 强制"先核对源码版本再回答"，杜绝 LLM 凭记忆编 runtime / dyld 细节，或拿 AFNetworking 2.x 的博客结论讲 4.x |
+| **一套版本管理脚本**（`sources.sh` 清单 + `bootstrap.sh` / `check-updates.sh` / `update-sources.sh`） | 十二份源码分别钉在正确的 drop / tag / 分支上，下载前先核对本地、能安全跟进上游更新 |
 
 配合 Claude Code、Codex 等能读 `AGENTS.md` 的 agent 使用：**clone → bootstrap → 直接提问**，它会自己找到该读哪个文件的哪一段。
 
@@ -37,7 +37,7 @@ cd ios-source-learning
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` 会把十一份上游源码下载到各自正确的 ref，并把 `maps/` 里的地图以符号链接挂回源码树原位。
+`bootstrap.sh` 会把十二份上游源码下载到各自正确的 ref，并把 `maps/` 里的地图以符号链接挂回源码树原位。
 **首次约 2–3 GB，视网络需要十几分钟**；可重复运行，**已经下载过的不会重复拉**。
 
 完整用法见下面的[脚本使用说明](#脚本使用说明)。
@@ -49,6 +49,8 @@ cd ios-source-learning
 > `dispatch_async` 到主队列，最终是谁把 block 跑起来的？
 >
 > objc 的 `isa` 里那些位分别是什么，arm64 和 x86_64 有什么差别？
+>
+> Rebase、Bind、chained fixups 在现代 iOS 二进制中分别如何编码？哪些开销可以从真机实验观察？
 >
 > AFNetworking 4.x 的回调为什么一定回到主线程？序列化又在哪个队列做？
 >
@@ -71,8 +73,9 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 ├── bootstrap.sh         # 搭建：下载源码（先核对本地）+ 挂载地图
 ├── check-updates.sh     # 只读探测：需不需要更新（秒级、带缓存）
 ├── update-sources.sh    # 执行更新（三种策略，见下）
-├── maps/                # ★ 本仓库唯一的正文：62 份源码地图（正文一律在 AGENTS.md）
+├── maps/                # ★ 本仓库唯一的正文：63 份源码地图（正文一律在 AGENTS.md）
 │   ├── new objc4/                    # 根 + runtime / Messengers / Threading / test / ObjectiveC / objcdt 六份模块地图
+│   ├── dyld/                         # Mach-O 装载、rebase / bind、closure、shared cache、chained fixups
 │   ├── CF-1153.18-apple/             # RunLoop 权威实现的符号行号表
 │   ├── libdispatch-apple/
 │   ├── libdispatch/
@@ -88,16 +91,17 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 ├── docs/plans/          # 上述提示词的设计与实施记录
 │
 └── （以下由 bootstrap.sh 克隆，.gitignore 不跟踪）
-    new objc4/  CF-1153.18-apple/  libdispatch-apple/  libdispatch/  swift-corelibs-foundation/
+    new objc4/  dyld/  CF-1153.18-apple/  libdispatch-apple/  libdispatch/  swift-corelibs-foundation/
     swift-foundation/  gnustep-base/
     third-party/AFNetworking/  third-party/JSONModel/  third-party/YYModel/  third-party/SDWebImage/
 ```
 
-### 六份 Apple 源码的定位
+### 七份 Apple 源码的定位
 
 | 目录 | 内容 | 钉在哪 |
 |---|---|---|
 | `new objc4/` | ObjC runtime | tag `objc4-951.7`（地图行号按此 drop 写） |
+| `dyld/` | Mach-O 装载器。rebase / bind、`LC_DYLD_INFO[_ONLY]`、`LC_DYLD_CHAINED_FIXUPS`、shared cache 与 PrebuiltLoader | tag `dyld-1378`（地图行号按此 tag 写） |
 | `CF-1153.18-apple/` | CoreFoundation，**RunLoop 权威版** | `main` @ `CF-1153.18`（macOS 10.13.6，上游已停更） |
 | `libdispatch-apple/` | GCD，**macOS drop** | 最新 tag（当前 `libdispatch-1542.100.32`） |
 | `libdispatch/` | GCD，Swift 开源版 | `main` |
@@ -133,7 +137,7 @@ Agent 会自动读 `AGENTS.md` → 按「按任务定位」表选中目标仓库
 **它们钉在具体 release tag 上**，理由和 objc4 一样：地图里的行号按该 tag 写，自动升版会让行号全部失效。
 所以 `update-sources.sh` 对这四份只 fetch、只报告，不改工作区；升版是人工任务（改 `sources.sh` 里的 ref + 校对地图行号）。
 
-**选型铁律**：研究 iOS/macOS 真实行为时，CoreFoundation 看 `CF-1153.18-apple/`、GCD 看 `libdispatch-apple/`。
+**选型铁律**：研究 iOS/macOS 真实行为时，CoreFoundation 看 `CF-1153.18-apple/`、GCD 看 `libdispatch-apple/`、Mach-O 装载与 fixups 看 `dyld/`。
 Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真实二进制；反过来查"10.13 之后 CF 怎么演进"只能看 swift-corelibs——Apple 已停止开源 CF。
 
 ---
@@ -252,17 +256,17 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 检查同时发现更新与错误时，`ERROR` 优先（退出码 `2`）；输出仍会列出已发现的更新，
 但不能假定未报出更新的其他源码已经完成远端核对。
 
-外加一类 `NOTICE`：有新版本但脚本按策略不会自动切（objc4、gnustep 与四份第三方库），需人工处理，**不改变退出码**——免得 agent 每轮都被驱使去跑一次注定无效的更新。
+外加一类 `NOTICE`：有新版本但脚本按策略不会自动切（objc4、dyld、gnustep 与四份第三方库），需人工处理，**不改变退出码**——免得 agent 每轮都被驱使去跑一次注定无效的更新。
 
 `update-sources.sh` 对三类仓库用三种策略：
 
 | 目标 | 策略 | 原因 |
 |---|---|---|
-| `objc4` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage` | 只 fetch、报告新版本，**永不动工作区** | 钉在指定 tag，自动升级会让地图里全部行号失效 |
+| `objc4` / `dyld` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage` | 只 fetch、报告有无新版本，**永不动工作区** | 钉在指定 tag，地图行号按该 tag 写 |
 | `libdispatch` / `foundation` / `swift-foundation` / `cf` | `merge --ff-only` | 干净的 tracking 分支 |
 | `libdispatch-apple` | 自动 checkout 到版本号最高的 tag | drop 代码在 tag 上，`main` 常落后 |
 
-安全约束：工作区脏默认跳过（`-f` 才 stash）、本地领先上游判为分叉只报告、只用 `--ff-only`、fetch 失败自动重试 3 次。`track` 策略（`libdispatch` / `foundation` / `swift-foundation` / `cf`）还会核对本地当前分支与 `sources.sh` 里配置的 ref：分支不符时 `check-updates.sh` 报 ERROR（退出码 2），`update-sources.sh` 跳过该目标且不 fetch（`-n`/`-f` 不旁路）。两个脚本都接受目标名收窄范围（`objc4` / `libdispatch` / `libdispatch-apple` / `foundation` / `swift-foundation` / `cf` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage`），`-h` 看完整用法。
+安全约束：工作区脏默认跳过（`-f` 才 stash）、本地领先上游判为分叉只报告、只用 `--ff-only`、fetch 失败自动重试 3 次。`track` 策略（`libdispatch` / `foundation` / `swift-foundation` / `cf`）还会核对本地当前分支与 `sources.sh` 里配置的 ref：分支不符时 `check-updates.sh` 报 ERROR（退出码 2），`update-sources.sh` 跳过该目标且不 fetch（`-n`/`-f` 不旁路）。两个脚本都接受目标名收窄范围（`objc4` / `dyld` / `libdispatch` / `libdispatch-apple` / `foundation` / `swift-foundation` / `cf` / `gnustep` / `afnetworking` / `jsonmodel` / `yymodel` / `sdwebimage`），`-h` 看完整用法。
 
 > 升级源码后行号会变，**地图里的行号需要同步校对**——这是 objc4 采取"只报告不自动切"策略的原因。
 
@@ -328,13 +332,14 @@ Swift 开源版含大量 Linux/Windows 适配，行号和实现都对不上真�
 ## 关于源码与许可
 
 本仓库内容为原创的源码地图与工具脚本；**源码本体一概不在此处**，由 `bootstrap.sh` 从各自上游仓库拉取，其许可以上游为准
-（objc4 / CF / libdispatch 的 Apple drop 遵循 APSL，swift-corelibs-* 与 swift-foundation 遵循 Apache-2.0，
+（objc4 / dyld / CF / libdispatch 的 Apple drop 遵循 APSL，swift-corelibs-* 与 swift-foundation 遵循 Apache-2.0，
 **gnustep-base 遵循 LGPL-2.1+**，AFNetworking / JSONModel / YYModel / SDWebImage 遵循 MIT）。
 
 上游地址：
 
 - https://github.com/apple-oss-distributions/objc4
 - https://github.com/apple-oss-distributions/CF
+- https://github.com/apple-oss-distributions/dyld
 - https://github.com/apple-oss-distributions/libdispatch
 - https://github.com/apple/swift-corelibs-libdispatch
 - https://github.com/apple/swift-corelibs-foundation
